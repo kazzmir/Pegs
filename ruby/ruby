@@ -1,0 +1,4 @@
+#!/bin/sh
+
+export PLTCOLLECTS=$PLTCOLLECTS:`pwd`/..
+racket $*
