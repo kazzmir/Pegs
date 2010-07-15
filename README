@@ -1,1 +1,25 @@
-Empty
+Peg generator in Racket (http://racket-lang.org)
+Github website: http://github.com/kazzmir/Pegs
+
+Features
+  * Constructs a PEG at compile-time
+  * Handles most of the normal PEG operators
+  * Supports heredocs
+
+Misfeatures
+  * Really slow
+
+Whats in a name?
+  * `pegs' is short
+  * Sort of like `pugs' which is popular with some people
+  * Maybe the `s' means scheme...??????????
+
+History
+  YYYY-MM-DD
+
+  2010-07-15 - Imported into Github
+  .......... - Various improvements and whatnot
+  2008-08-23 - Started
+
+Jon Rafkind
+jon@rafkind.com
