@@ -3,7 +3,7 @@
 ;; Rules come from this Java 6 BNF
 ;; http://www.cmis.brighton.ac.uk/staff/rnb/bosware/javaSyntax/rulesLinked.html
 
-(require "peg.ss")
+(require "../peg.ss")
 
 (provide pretty-print
          (rename-out (java-parse parse)))
