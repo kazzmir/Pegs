@@ -37,7 +37,7 @@
       (base (("(" w (bind e expr) w ")") e)
 	    (((bind o op) w "(" w (bind e expr) w ")")
 	      (o e))
-	    (((bind o multi-op) w "(" w (bind e1 expr) (bind es (* w "," expr)) w ")")
+	    (((bind o multi-op) w "(" w (bind e1 expr) (bind es (* w "," w expr)) w ")")
 	     (apply o e1 es))
 	    (("pi") pi)
 	    ((num) $))
@@ -91,16 +91,16 @@
 (printf "\n")
 
 (calc (let ((input (make-hash)))
-	(lambda (i)
-	  (let ((n (hash-ref input i
-			     ;; now this is sort of a hack in that I know the peg
-			     ;; will only ever increment i by 1 so I only have to
-			     ;; read the next char, otherwise it will already be
-			     ;; in the hash.
-			     (lambda ()
-			       (let ((next (read-char)))
-				 (hash-set! input i next)
-				 next)))))
-	    (if (eof-object? n)
-	      end-of-input
-	      n)))))
+        (lambda (i)
+          (let ((n (hash-ref input i
+                             ;; now this is sort of a hack in that I know the peg
+                             ;; will only ever increment i by 1 so I only have to
+                             ;; read the next char, otherwise it will already be
+                             ;; in the hash.
+                             (lambda ()
+                               (let ((next (read-char)))
+                                 (hash-set! input i next)
+                                 next)))))
+            (if (eof-object? n)
+              end-of-input
+              n)))))
