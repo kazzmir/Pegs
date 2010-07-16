@@ -1,6 +1,6 @@
 #lang scheme
 
-(require "peg.ss")
+(require "../peg.ss")
 
 (define p1
   (peg

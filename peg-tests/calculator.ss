@@ -10,7 +10,7 @@
 ;; 
 ;; Hit enter on a blank line to end input
 
-(require "peg.ss")
+(require "../peg.ss")
 
 (define (convert-to-decimal n)
   (if (= 0 n)
