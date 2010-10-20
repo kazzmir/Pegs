@@ -1,0 +1,11 @@
+This directory contains a ruby parser and a translator from ruby to racket
+  all-tests.ss - runs parsing tests on files in the `tests' directory
+  ast.ss - structure definitions representing the AST of ruby
+  main.ss - does the translation from parsed ruby to racket
+  Makefile - compiles the racket code to make it faster
+  old-parser.ss - first attempt at a ruby parser using a lex/yacc technique. not used anymore, but this file is around for historical purposes.
+  parse.ss - runs the parser on a ruby file
+  peg.ss 
+  ruby.ss - the PEG definition for ruby
+  run.ss - runs a ruby file and prints some statistics
+  translate.ss - translates ruby to an intermediate representation of s-expressions
