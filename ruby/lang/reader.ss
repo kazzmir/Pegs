@@ -4,8 +4,9 @@
 #:read-syntax ruby-read-syntax
 #:whole-body-readers? #t
 
-(require "../ruby.ss")
-(require "../translate.ss")
+(require "../ruby.ss"
+	 "../translate.ss"
+	 (only-in racket/pretty pretty-format))
 
 (define (ruby-read port)
   (syntax->datum (ruby-read-syntax #f port)))
@@ -15,6 +16,6 @@
                 (port-next-location port)))
     (let ((ast (parse port)))
       (let ((expr (ruby->s-expr source-name ast position)))
-        (printf "Created ~a\n" (syntax->datum expr))
+        (printf "Created ~a\n" (pretty-format (syntax->datum expr)))
         (list expr)))))
 )

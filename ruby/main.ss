@@ -1,6 +1,7 @@
 #lang racket/base
 
-(require racket/class)
+(require racket/class
+	 (for-syntax racket/base))
 
 #|
 (let ((global Nil) ...)
@@ -9,8 +10,7 @@
       body)
 |#
 
-(require (for-syntax scheme/base))
-
+;; I should probably export ruby-specific versions of these things
 (provide #%app #%datum #%top #%module-begin)
 
 (define RubyClass
@@ -115,6 +115,13 @@
                                                                 (send s &ruby->native))
                                                               vs)))))
 
+		 (define/public (&* block arg)
+		   (define new-values
+		      (apply append
+			    (for/list ([i (in-range 0 arg)])
+				      value)))
+		   (send Array new #f new-values))
+
                  (define/public (each func)
                    (for/last ((i value))
                              (send func call #f i)))
@@ -173,11 +180,13 @@
 
 (define-for-syntax (do-id stx)
   (syntax-case stx (&Identifier)
-    ((&Identifier id) #'id
+    [(&Identifier id) #'id
      #;
      (let ((var (string->symbol (string-append "ruby:"
                                                (symbol->string (syntax->datum #'id))))))
-       (datum->syntax #'id var #'id #'id)))))
+       (datum->syntax #'id var #'id #'id))]
+    [else (raise-syntax-error 'do-id "not an identifier" stx)]
+    ))
 
 (define-syntax* &Constant
   (lambda (stx)
@@ -187,8 +196,12 @@
 
 (define-for-syntax (variable var)
   (syntax-case var (&Variable)
-    ((&Variable id)
-     (make-variable-id (do-id #'id)))))
+    [(&Variable id)
+     (begin
+       #;
+       (printf "Do variable for ~a\n" #'id)
+       (make-variable-id (do-id #'id)))]
+    [else (raise-syntax-error 'variable "not a variable" var)]))
 
 (define-for-syntax (do-block block)
   (syntax-case block (&Block)
@@ -214,17 +227,17 @@
              ((&Call-args (cargs ...) crest cblock)
               (with-syntax ([(cargs-eval ...) (generate-temporaries #'(cargs ...))])
                 (if math-op
-                #'(let ([object-eval object]
-                        [cargs-eval cargs]
-                        ...)
-                    (if (and (number? object-eval)
-                             (number? cargs-eval)
-                             ...)
-                      (fop object-eval cargs-eval ...)
-                      (send/apply object-eval fop fblock
-                                  (append (list cargs-eval ...) '()))))
-                #'(send/apply object fop fblock
-                              (append (list cargs ...) '()))))))))))))
+		  #'(let ([object-eval object]
+			  [cargs-eval cargs]
+			  ...)
+		      (if (and (number? object-eval)
+			       (number? cargs-eval)
+			       ...)
+			(fop object-eval cargs-eval ...)
+			(send/apply object-eval fop fblock
+				    (append (list cargs-eval ...) '()))))
+		  #'(send/apply object fop fblock
+				(append (list cargs ...) '()))))))))))))
 
 (define-syntax* &Class
   (lambda (stx)

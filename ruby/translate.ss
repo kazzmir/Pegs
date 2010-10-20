@@ -61,7 +61,7 @@
          ((struct Operation+ (loc pos)) (make/loc* '&+ loc pos))
 	 ((struct Operation- (loc pos)) (make/loc* '&- loc pos))
 	 ((struct Operation< (loc pos)) (make/loc* '&< loc pos))
-	 ((struct Operation* (loc pos)) (make/loc* '&* loc pos))
+	 ((struct Operation* (loc pos)) (make/loc* `(&Identifier &*) loc pos))
 	 ((struct Operation/ (loc pos)) (make/loc* '&/ loc pos))
 
          ((struct Array (loc pos args))
@@ -154,7 +154,8 @@
           (make/loc* `(&Method-call ,(loop object)
                                     ,(loop op)
                                     ,(loop args)
-                                    ,(if block (loop block)
+                                    ,(if block
+				       (loop block)
                                        (make/loc* #f loc pos)))
                      loc pos))
 
@@ -212,6 +213,13 @@
 
 	 ((struct Operation (loc pos op arg1 arg2))
           (debug "Operation ~a ~a ~a\n" op arg1 arg2)
+	  (loop (make-Method-call loc pos arg1 op (make-Call-args loc pos (list arg2) #f #f) #F))
+	  #;
+	  (make/loc* `(&Method-call ,(loop arg1)
+				    ,(loop op)
+				    ,(loop arg2) #f)
+		     loc pos)
+	  #;
           (make/loc* `(&Operation ,(loop op)
                                  ,(loop arg1)
                                  ,(loop arg2))
