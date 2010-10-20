@@ -311,7 +311,9 @@
     ((&Normal-argument id)
      (make-variable-id (do-id #'id)))))
 
-(provide (rename-out (- &-) (+ &+) (< &<)))
+(provide (rename-out (- &-) (+ &+) (< &<)
+		     (+ racket:+)
+		     ))
 
 ;; all operations should be method calls
 #;
@@ -397,3 +399,17 @@
                      (d-id (do-id #'dname)))
          ;; (printf "Binding ~a args ~a\n" #'(margs ...) (syntax->datum #'(margs ...)))
          #'(define (d-id margs ...) dbody))))))
+
+(provide &For)
+(define-syntax (&For stx)
+  (syntax-case stx ()
+    [(_ vars range body)
+     (with-syntax ([(var ...) (map variable (syntax->list #'vars))])
+       #'(for ([var ... range])
+           body))]))
+
+(provide &Range)
+(define-syntax (&Range stx)
+  (syntax-case stx ()
+    [(_ low high)
+     #'(in-range low high)]))

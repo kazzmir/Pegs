@@ -64,6 +64,21 @@
 	 ((struct Operation* (loc pos)) (make/loc* `(&Identifier &*) loc pos))
 	 ((struct Operation/ (loc pos)) (make/loc* '&/ loc pos))
 
+	 [(struct For-statement (loc pos vars expr body))
+	  (let ((vs (match vars
+                           ((struct Empty-var (loc pos)) '())
+                           ((struct Lhs (loc pos var)) (list (loop vars)))
+                           ((struct Mlhs (loc pos vars rest))
+                            (map loop vars)))))
+	    (make/loc* `(&For ,vs
+			      ,(loop expr)
+			      ,(loop body))
+		       loc pos))]
+
+	 [(struct Range-inclusive (loc pos start end))
+	  (make/loc* `(&Range ,(loop start) (racket:+ 1 ,(loop end)))
+		     loc pos)]
+
          ((struct Array (loc pos args))
           (debug "Array ~a\n" args)
           (make/loc* `(&Array ,@(map loop args)) loc pos))
