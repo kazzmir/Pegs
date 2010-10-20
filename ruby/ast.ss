@@ -1,4 +1,8 @@
-#lang scheme
+#lang racket/base
+
+;; Definitions of AST structures
+
+;; TODO: lots of misnamed/abbreviated things, rename/expand them
 
 (provide (all-defined-out))
 

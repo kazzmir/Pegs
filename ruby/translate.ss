@@ -3,7 +3,8 @@
 ;; Good reference for ruby syntax and semantics
 ;; http://web.njit.edu/all_topics/Prog_Lang_Docs/html/ruby/syntax.html
 
-(require racket/match)
+(require racket/match
+	 (for-syntax racket/base))
 
 (require "ast.ss")
 
@@ -12,6 +13,11 @@
 (define (make/loc syntax source position span)
   (let ((s (list source #f #f position (max 0 (sub1 span)))))
     (datum->syntax #f syntax s no-ctxt-stx)))
+
+(define-syntax (debug stx)
+  (syntax-case stx ()
+	       [(_ stuff ...)
+		#'(printf stuff ...)]))
 
 (define verbose 0)
 
@@ -35,11 +41,11 @@
   (define (loop ast)
     (match ast
 	 ((struct Program (loc pos compstmt))
-          (printf "Program ~a\n" compstmt)
+          (debug "Program ~a\n" compstmt)
           (make/loc* `(&Program ,(loop compstmt))
                      loc pos))
 	 ((struct Identifier (loc pos name))
-          (printf "Identifier ~a\n" name)
+          (debug "Identifier ~a\n" name)
           (make/loc* `(&Identifier ,(make/loc* (string->symbol name) loc pos))
                     loc pos))
 
@@ -49,7 +55,7 @@
                     loc pos))
 
 	 ((struct Normal-argument (loc pos id))
-          (printf "Normal-argument ~a\n" id)
+          (debug "Normal-argument ~a\n" id)
           (make/loc* `(&Normal-argument ,(loop id)) loc pos))
 
          ((struct Operation+ (loc pos)) (make/loc* '&+ loc pos))
@@ -59,14 +65,14 @@
 	 ((struct Operation/ (loc pos)) (make/loc* '&/ loc pos))
 
          ((struct Array (loc pos args))
-          (printf "Array ~a\n" args)
+          (debug "Array ~a\n" args)
           (make/loc* `(&Array ,@(map loop args)) loc pos))
 
          ((struct Variable (loc pos var))
           (make/loc* `(&Variable ,(loop var)) loc pos))
 
          ((struct Block (loc pos vars body))
-          (printf "Block ~a ~a\n" vars body)
+          (debug "Block ~a ~a\n" vars body)
           (let ((vs (match vars
                            ((struct Empty-var (loc pos)) '())
                            ((struct Lhs (loc pos var)) (list (loop vars)))
@@ -88,21 +94,21 @@
 
 	 ;; fix
 	 ((struct Body (loc pos body else rescue ensure))
-          (printf "Body ~a ~a ~a ~a\n" body else rescue ensure)
+          (debug "Body ~a ~a ~a ~a\n" body else rescue ensure)
           (make/loc* `(&Body ,(loop body)) loc pos))
 
          ((struct Else (loc pos body))
           (loop body))
 
          ((struct If-statement (loc pos condition body elseifs else))
-          (printf "If ~a ~a ~a ~a\n" condition body elseifs else)
+          (debug "If ~a ~a ~a ~a\n" condition body elseifs else)
           (make/loc* `(&If ,(loop condition) ,(loop body)
                           (,@(map loop elseifs))
                           ,(if else (loop else) '(void)))
                      loc pos))
 
          ((struct Elseif (loc pos cond body))
-          (printf "Elseif ~a ~a\n" cond body)
+          (debug "Elseif ~a ~a\n" cond body)
           (make/loc* `(&Elseif ,(loop cond) ,(loop body)) loc pos))
 
          ((struct Lhs (loc pos var))
@@ -113,7 +119,7 @@
                      loc pos))
 
 	 ((struct Function-arglist (loc pos args rest block))
-          (printf "Function-arglist ~a ~a ~a\n" args rest block)
+          (debug "Function-arglist ~a ~a ~a\n" args rest block)
           (make/loc* `(&Function-arglist (args ,@(map (lambda (a)
                                                       (loop a)) args))
                                        (rest1 ,(if rest (loop rest)
@@ -129,7 +135,7 @@
                       source loc pos)))
 
 	 ((struct Call-args (loc pos args rest block))
-          (printf "Call-args ~a ~a ~a\n" args rest block)
+          (debug "Call-args ~a ~a ~a\n" args rest block)
           (make/loc* `(&Call-args (,@(map (lambda (a)
                                             (loop a)) args))
                                 ,(if rest (loop rest) (make/loc* '() loc pos))
@@ -144,7 +150,7 @@
                       source loc pos)))
 
          ((struct Method-call (loc pos object op args block))
-          (printf "Method-call ~a ~a ~a ~a\n" object op args block)
+          (debug "Method-call ~a ~a ~a ~a\n" object op args block)
           (make/loc* `(&Method-call ,(loop object)
                                     ,(loop op)
                                     ,(loop args)
@@ -154,7 +160,7 @@
 
 	 ;; fix
 	 ((struct Function-call (loc pos op args block))
-          (printf "Function-call ~a ~a ~a\n" op args block)
+          (debug "Function-call ~a ~a ~a\n" op args block)
           (make/loc* `(&Function-call (op ,(loop op))
                                     (args ,(loop args))
                                     (block ,(if block (loop block)
@@ -173,7 +179,7 @@
                     source loc pos))
 
          ((struct Class-statement (loc pos name super body))
-          (printf "Class ~a ~a ~a\n" name super body)
+          (debug "Class ~a ~a ~a\n" name super body)
           (make/loc* `(&Class ,(loop name)
                               ,(if super (loop super) (make/loc* #f loc pos))
                               ,(loop body)
@@ -181,13 +187,13 @@
                      loc pos))
 
 	 ((struct Compstmt (loc pos stmts))
-          (printf "Compstmt ~a\n" stmts)
+          (debug "Compstmt ~a\n" stmts)
           (make/loc* `(&Compstmt ,@(map (lambda (s)
                                         (loop s)) stmts))
                     loc pos))
 
 	 ((struct Definition-statement (loc pos name args body))
-          (printf "Definition-statement ~a ~a ~a\n" name args body)
+          (debug "Definition-statement ~a ~a ~a\n" name args body)
           (make/loc* `(&Definition-statement (name ,(loop name))
                                             (args ,(loop args))
                                             (body ,(loop body)))
@@ -201,11 +207,11 @@
                       loc pos)))
 
 	 ((struct Number (loc pos value))
-          (printf "Number ~a\n" value)
+          (debug "Number ~a\n" value)
           (make/loc* `(&Number ,(make/loc* value loc pos)) loc pos))
 
 	 ((struct Operation (loc pos op arg1 arg2))
-          (printf "Operation ~a ~a ~a\n" op arg1 arg2)
+          (debug "Operation ~a ~a ~a\n" op arg1 arg2)
           (make/loc* `(&Operation ,(loop op)
                                  ,(loop arg1)
                                  ,(loop arg2))
