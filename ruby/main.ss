@@ -1,4 +1,6 @@
-#lang scheme
+#lang racket/base
+
+(require racket/class)
 
 #|
 (let ((global Nil) ...)

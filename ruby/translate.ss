@@ -1,9 +1,9 @@
-#lang scheme
+#lang racket/base
 
 ;; Good reference for ruby syntax and semantics
 ;; http://web.njit.edu/all_topics/Prog_Lang_Docs/html/ruby/syntax.html
 
-(require scheme/match)
+(require racket/match)
 
 (require "ast.ss")
 
@@ -14,7 +14,6 @@
     (datum->syntax #f syntax s no-ctxt-stx)))
 
 (define verbose 0)
-
 
 (provide ruby->s-expr)
 (define (ruby->s-expr source ruby-ast starting-position)

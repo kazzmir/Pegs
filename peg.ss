@@ -150,9 +150,9 @@ foo1 = (((bind f foo) (bind f* foo1)) (cons f f*)
   (when verbose
     (apply printf v)))
 
-(define nothing (lambda () #f))
+(define nothing (gensym))
 (provide end-of-input)
-(define end-of-input (lambda () #f))
+(define end-of-input (gensym))
 
 (define (default-action last)
   (lambda (input column)
