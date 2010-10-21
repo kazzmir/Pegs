@@ -15,6 +15,8 @@
   (let-values (((line column position)
                 (port-next-location port)))
     (let ((ast (parse port)))
+      (when (not ast)
+	(raise-syntax-error 'read "syntax error"))
       (let ((expr (ruby->s-expr source-name ast position)))
         (printf "Created ~a\n" (pretty-format (syntax->datum expr)))
         (list expr)))))

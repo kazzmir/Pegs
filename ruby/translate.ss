@@ -6,7 +6,8 @@
 (require racket/match
 	 (for-syntax racket/base))
 
-(require "ast.ss")
+(require "ast.ss"
+	 "ruby.ss")
 
 (define no-ctxt-stx (read-syntax #f (open-input-string "Ruby")))
 
@@ -38,6 +39,10 @@
                        ((struct Definition-statement (loc pos name args body))
                         (inner-loop (cons (loop name) names) (cdr stmts)))
                        (else (inner-loop names (cdr stmts)))))))))
+  (define (build-regexp contents)
+    ;; FIXME
+    #f
+    )
   (define (loop ast)
     (match ast
 	 ((struct Program (loc pos compstmt))
@@ -54,15 +59,42 @@
           (make/loc* `(&Constant ,(make/loc* (string->symbol name) loc pos))
                     loc pos))
 
-	 ((struct Normal-argument (loc pos id))
+	 [(struct Normal-argument (loc pos id))
           (debug "Normal-argument ~a\n" id)
-          (make/loc* `(&Normal-argument ,(loop id)) loc pos))
+          (make/loc* `(&Normal-argument ,(loop id)) loc pos)]
 
-         ((struct Operation+ (loc pos)) (make/loc* '&+ loc pos))
-	 ((struct Operation- (loc pos)) (make/loc* '&- loc pos))
-	 ((struct Operation< (loc pos)) (make/loc* '&< loc pos))
-	 ((struct Operation* (loc pos)) (make/loc* `(&Identifier &*) loc pos))
-	 ((struct Operation/ (loc pos)) (make/loc* '&/ loc pos))
+         [(struct Operation+ (loc pos)) (make/loc* '(&Identifier &+) loc pos)]
+	 [(struct Operation- (loc pos)) (make/loc* '(&Identifier &-) loc pos)]
+	 [(struct Operation< (loc pos)) (make/loc* '(&Identifier &<) loc pos)]
+	 [(struct Operation* (loc pos)) (make/loc* `(&Identifier &*) loc pos)]
+	 [(struct Operation!= (loc pos)) (make/loc* `(&Identifier &!=) loc pos)]
+	 [(struct Operation/ (loc pos)) (make/loc* '(&Identifier &/) loc pos)]
+	 [(struct Operation& (loc pos)) (make/loc* '(&Identifier &&) loc pos)]
+	 [(struct Operation-or (loc pos)) (make/loc* '(&Identifier &or) loc pos)]
+	 [(struct Operation== (loc pos)) (make/loc* '(&Identifier &==) loc pos)]
+	 [(struct Operation&& (loc pos)) (make/loc* '(&Identifier &&&) loc pos)]
+	 [(struct Operation<=> (loc pos)) (make/loc* '(&Identifier &<=>) loc pos)]
+	 [(struct Operation<< (loc pos)) (make/loc* '(&Identifier &<<) loc pos)]
+
+	 [(struct Symbol (location span id))
+	  (make/loc* ''id location span)]
+
+	 [(struct Regexp (loc pos contents options))
+	  (make/loc* `(racket:regexp ,(build-regexp contents)) loc pos)]
+
+	 [(struct Nil (loc pos))
+	  (make/loc* '(make-nil) loc pos)]
+
+	 [(struct Not (loc pos expression))
+	  (make/loc* `(racket:not ,(loop expression)) loc pos)]
+
+	 [(struct Array-lookup (loc pos array args))
+	  (make/loc* `(&Array-lookup ,(loop array) ,@(map loop args))
+		     loc pos)]
+
+	 [(struct String-computation (loc pos expr))
+	  (make/loc* `(&String-computation ,(loop expr))
+		     loc pos)]
 
 	 [(struct For-statement (loc pos vars expr body))
 	  (let ((vs (match vars
@@ -77,6 +109,10 @@
 
 	 [(struct Range-inclusive (loc pos start end))
 	  (make/loc* `(&Range ,(loop start) (racket:+ 1 ,(loop end)))
+		     loc pos)]
+	 
+	 [(struct Range-exclusive (loc pos start end))
+	  (make/loc* `(&Range ,(loop start) ,(loop end))
 		     loc pos)]
 
          ((struct Array (loc pos args))
@@ -149,6 +185,10 @@
             (make/loc #'(#:block block args ... . rest)
                       source loc pos)))
 
+	 [(struct Multiple-assignment (location span left-hand right-hand))
+	  ;; FIXME
+	  (make/loc* `(void) location span)]
+
 	 ((struct Call-args (loc pos args rest block))
           (debug "Call-args ~a ~a ~a\n" args rest block)
           (make/loc* `(&Call-args (,@(map (lambda (a)
@@ -208,6 +248,9 @@
                                         (loop s)) stmts))
                     loc pos))
 
+	 [(struct True (loc pos))
+	  (make/loc* '#t loc pos)]
+
 	 ((struct Definition-statement (loc pos name args body))
           (debug "Definition-statement ~a ~a ~a\n" name args body)
           (make/loc* `(&Definition-statement (name ,(loop name))
@@ -238,7 +281,12 @@
           (make/loc* `(&Operation ,(loop op)
                                  ,(loop arg1)
                                  ,(loop arg2))
-                    loc pos))))
+                    loc pos))
+	 [else (error 'translate "don't know how to translate ~a originally as `~a' at position ~a to ~a" ast (pretty-print ast)
+		      (Location-position ast)
+		      (+ (Location-position ast)
+			 (Location-span ast)))]
+	 ))
   (loop ruby-ast))
 
 #;

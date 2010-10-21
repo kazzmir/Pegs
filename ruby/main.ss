@@ -1,6 +1,9 @@
 #lang racket/base
 
 (require racket/class
+	 racket/match
+	 racket/list
+	 racket/set
 	 (for-syntax racket/base))
 
 #|
@@ -11,12 +14,16 @@
 |#
 
 ;; I should probably export ruby-specific versions of these things
-(provide #%app #%datum #%top #%module-begin)
+(provide #%app #%datum #%top #%module-begin
+	 void)
 
 (define RubyClass
   (class* object% ()
           (init-field instance-class)
           (init-field name)
+
+	  (define/public (instance? thing)
+            (is-a? thing instance-class))
 
           (define/public (new b . args)
             (apply make-object instance-class args))
@@ -46,6 +53,8 @@
          (class* ObjectClass ()
                  (init-field value)
                  (define/override (to_s b) this)
+		 (define/public (&!= block arg)
+		   (equal? value (send arg &ruby->native)))
                  (define/public (&ruby->native) value)
                  (super-new)))))
 
@@ -60,6 +69,20 @@
                    (apply closure block vals))
                  (super-new)))))
 
+(define Boolean
+  (new RubyClass
+       (name "Boolean")
+       (instance-class
+	 (class* ObjectClass ()
+		 (init-field value)
+
+		 (define/public (&&& block bool)
+                   (equal? value (if (boolean? bool)
+				   bool
+				   (get-field value bool))))
+
+		 (super-new)))))
+
 (provide Fixnum)
 (define Fixnum
   (new RubyClass
@@ -73,6 +96,17 @@
 
                  (define/override (to_s b)
                    (send String new #f (format "~a" value)))
+
+		 (define/public (&!= block n)
+		   (not (&== block n)))
+
+		 (define/public (&== block n)
+	           (match n
+		     [(? (lambda (x) (send Fixnum instance? x)))
+		      (equal? value
+			      (get-field value n))]
+		     [(? number?) (equal? value n)]
+		     [else #f]))
 
                  (define/public (&+ n b)
                    (let ((n-value (get-field value n)))
@@ -104,6 +138,39 @@
          (class* ObjectClass ()
                  (init-field value)
 
+		 (define (make value)
+		   (send Array new #f value))
+
+		 (define/public (get-values) value)
+
+		 (define/public (hash block)
+		   (send Fixnum new #f (equal-hash-code value)))
+
+		 (define/public (splice low high expression)
+                   (set! value (append (drop value low)
+				       (list expression)
+				       (take value high))))
+
+		 (define/public (get-item arg)
+                   (list-ref value arg))
+
+		 (define/public (get-item-range low high)
+		   (make (take (drop value low)
+			       (- high low))))
+
+		 (define/public (&& block arg)
+                   (make (set-map (set-intersect (apply set value) (apply set (get-field value arg))) values)))
+
+		 (define/public (&or block arg)
+                   (make (set-map (set-union (apply set value)
+					     (apply set (get-field value arg)))
+				  values)))
+
+		 (define/public (&- block arg)
+		   (make (set-map (set-subtract (apply set value)
+					     (apply set (get-field value arg)))
+				  values)))
+
                  (define/override (to_s b)
                    (let ((vs (map (lambda (v)
                                     (if (number? v)
@@ -116,11 +183,25 @@
                                                               vs)))))
 
 		 (define/public (&* block arg)
-		   (define new-values
-		      (apply append
-			    (for/list ([i (in-range 0 arg)])
-				      value)))
+		   (match arg
+			  [(? (lambda (x) (send String instance? x)))
+			   (send String new #f
+				 (map (lambda (x) format "~a" x)
+				      (add-between value (send arg &ruby->native))))]
+			  [else
+			    (define new-values
+			      (apply append
+				     (for/list ([i (in-range 0 arg)])
+					       value)))
+			    (send Array new #f new-values)]))
+
+		 (define/public (&+ block arg)
+                   (define new-values
+		     (append value (send arg get-values)))
 		   (send Array new #f new-values))
+
+		 (define/public (&!= block arg)
+		   (not (equal? value (send arg get-values))))
 
                  (define/public (each func)
                    (for/last ((i value))
@@ -156,6 +237,7 @@
   block)
 
 (define-struct nil ())
+(provide make-nil)
 
 (define-for-syntax (make-variable-id id)
   (let ((var (string->symbol (string-append "var-"
@@ -164,10 +246,15 @@
 
 (define-syntax define-syntax*
   (syntax-rules ()
-    ((_ name expr)
+    [(_ (name args ...) body ...)
+     (begin
+       (define-syntax name (lambda (args ...) body ...))
+       (provide name))]
+    [(_ name expr)
      (begin
        (define-syntax name expr)
-       (provide name)))))
+       (provide name))]
+    ))
 
 (define-syntax* &Program
   (syntax-rules ()
@@ -225,19 +312,28 @@
          (let ([math-op (memq (syntax->datum #'fop) '(&- &+ &< &> &<= &>=))])
            (syntax-case #'args (&Call-args)
              ((&Call-args (cargs ...) crest cblock)
-              (with-syntax ([(cargs-eval ...) (generate-temporaries #'(cargs ...))])
+              (with-syntax ([(cargs-eval ...) (generate-temporaries #'(cargs ...))]
+			    )
                 (if math-op
 		  #'(let ([object-eval object]
 			  [cargs-eval cargs]
 			  ...)
-		      (if (and (number? object-eval)
-			       (number? cargs-eval)
-			       ...)
-			(fop object-eval cargs-eval ...)
-			(send/apply object-eval fop fblock
-				    (append (list cargs-eval ...) '()))))
-		  #'(send/apply object fop fblock
-				(append (list cargs ...) '()))))))))))))
+		      (cond
+			[(and (number? object-eval)
+			      (number? cargs-eval)
+			      ...)
+			   (fop object-eval cargs-eval ...)]
+			[else (send/apply object-eval fop fblock
+				    (append (list cargs-eval ...) '()))]))
+		  #'(let ([object-eval object])
+		      (send/apply (cond
+				    [(number? object-eval)
+				     (send Fixnum new #f object-eval)]
+				    [(boolean? object-eval)
+				     (send Boolean new #f object-eval)]
+				    [else object-eval])
+				  fop fblock
+				  (append (list cargs ...) '())))))))))))))
 
 (define-syntax* &Class
   (lambda (stx)
@@ -262,7 +358,7 @@
   (lambda (stx)
     (syntax-case stx ()
       ((_) #'(make-nil))
-      ((_ body)
+      [(_ body)
        (syntax-case #'body (&Assignment)
          ((&Assignment lhs expr)
           (with-syntax ((var (variable #'lhs)))
@@ -272,18 +368,26 @@
               #'(let ((var expr))
                   var))))
          (_
-           #'(begin body))))
-      ((_ body0 body1 bodys ...)
-       (syntax-case #'body0 (&Assignment)
-         ((&Assignment lhs expr)
+           #'(begin body)))]
+      [(_ body0 body1 bodys ...)
+       (syntax-case #'body0 (&Assignment &Array-lookup)
+         [(&Assignment (&Array-lookup object start end)
+		       expression)
+	  (with-syntax ([var (variable #'object)])
+            (if (bound? #'var)
+	      #'(begin
+		  (send var splice start end expression)
+		  (&Compstmt body1 bodys ...))
+	      (raise-syntax-error "~a is unbound" #'var)))]
+         [(&Assignment lhs expr)
           (with-syntax ((var (variable #'lhs)))
             (if (bound? #'var)
               #'(begin (set! var expr)
                        (&Compstmt body1 bodys ...))
               #'(let ((var expr))
-                  (&Compstmt body1 bodys ...)))))
+                  (&Compstmt body1 bodys ...))))]
          (_
-           #'(begin body0 (&Compstmt body1 bodys ...))))))))
+           #'(begin body0 (&Compstmt body1 bodys ...))))])))
 
 (define-syntax* &If
   (lambda (stx)
@@ -313,7 +417,15 @@
 
 (provide (rename-out (- &-) (+ &+) (< &<)
 		     (+ racket:+)
-		     ))
+		     (not racket:not)
+		     (regexp racket:regexp)
+		     )
+	 quote
+	 )
+
+(provide defined?)
+(define (defined? something)
+  #t)
 
 ;; all operations should be method calls
 #;
@@ -388,8 +500,7 @@
     (syntax-case stx (&Body)
       ((&Body body) #'body))))
 
-(provide &Definition-statement)
-(define-syntax &Definition-statement
+(define-syntax* &Definition-statement
   (lambda (stx)
     (syntax-case stx (name args body)
       ((_ (name dname)
@@ -400,16 +511,31 @@
          ;; (printf "Binding ~a args ~a\n" #'(margs ...) (syntax->datum #'(margs ...)))
          #'(define (d-id margs ...) dbody))))))
 
-(provide &For)
-(define-syntax (&For stx)
+(define-syntax* (&For stx)
   (syntax-case stx ()
     [(_ vars range body)
      (with-syntax ([(var ...) (map variable (syntax->list #'vars))])
        #'(for ([var ... range])
            body))]))
 
-(provide &Range)
-(define-syntax (&Range stx)
+(define-syntax* (&Range stx)
   (syntax-case stx ()
     [(_ low high)
      #'(in-range low high)]))
+
+(define-syntax* &String-computation
+  (syntax-rules ()
+   [(_ expression)
+    (send (send expression to_s #f) &ruby->native)]))
+  
+(define-syntax* (&Array-lookup stx)
+  (syntax-case stx (&Range)
+    [(_ object start end)
+     (with-syntax ([var (variable #'object)])
+       #'(send var get-item-range start end))]
+    [(_ object (&Range low high))
+     (with-syntax ([var (variable #'object)])
+       #'(send var get-item-range low high))]
+    [(_ object item)
+     (with-syntax ([var (variable #'object)])
+       #'(send var get-item item))]))

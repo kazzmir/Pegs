@@ -419,7 +419,9 @@
                                                     (pretty-print expr)))
          ((struct Inline-if (loc pos expr stmt)) (format "~a if ~a\n"
                                                  (pretty-print stmt)
-                                                 (pretty-print expr)))))
+                                                 (pretty-print expr)))
+	 [else (error 'pretty-print "cannot pretty print ~a" ast)]
+	 ))
 
 
 (define (qword-match-ends left right)
