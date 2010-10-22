@@ -454,7 +454,7 @@
                    #'(f #f)))))))))
 
 (define-for-syntax (do-args stx)
-  (printf "Wacka ~a\n" (syntax->datum stx))
+  ;; (printf "Wacka ~a\n" (syntax->datum stx))
   (syntax-case stx (args rest1 block)
     ((f (args fargs ...) (rest1 frest) (block fblock))
      #;

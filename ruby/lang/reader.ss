@@ -5,8 +5,8 @@
 #:whole-body-readers? #t
 
 (require "../ruby.ss"
-	 "../translate.ss"
-	 (only-in racket/pretty pretty-format))
+         "../translate.ss"
+         (only-in racket/pretty pretty-format))
 
 (define (ruby-read port)
   (syntax->datum (ruby-read-syntax #f port)))
@@ -16,7 +16,7 @@
                 (port-next-location port)))
     (let ((ast (parse port)))
       (when (not ast)
-	(raise-syntax-error 'read "syntax error"))
+        (raise-syntax-error 'read "syntax error"))
       (let ((expr (ruby->s-expr source-name ast position)))
         (printf "Created ~a\n" (pretty-format (syntax->datum expr)))
         (list expr)))))
