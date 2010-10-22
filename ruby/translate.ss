@@ -11,6 +11,7 @@
 
 (define no-ctxt-stx (read-syntax #f (open-input-string "Ruby")))
 
+;; creates a syntax object given an s-expression and some line information
 (define (make/loc syntax source position span)
   (let ((s (list source #f #f position (max 0 (sub1 span)))))
     (datum->syntax #f syntax s no-ctxt-stx)))
@@ -24,8 +25,8 @@
 
 (define verbose 0)
 
-(provide ruby->s-expr)
-(define (ruby->s-expr source ruby-ast starting-position)
+(provide ruby-ast->syntax)
+(define (ruby-ast->syntax source ruby-ast starting-position)
   (define (make/loc* value loc span)
     (make/loc value source (+ loc starting-position) span))
   (define (find-definitions compstmt)
