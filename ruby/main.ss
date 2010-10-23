@@ -97,16 +97,16 @@
                  (define/override (to_s b)
                    (send String new #f (format "~a" value)))
 
-		 (define/public (&!= block n)
-		   (not (&== block n)))
+                 (define/public (&!= block n)
+                   (not (&== block n)))
 
-		 (define/public (&== block n)
-	           (match n
-		     [(? (lambda (x) (send Fixnum instance? x)))
-		      (equal? value
-			      (get-field value n))]
-		     [(? number?) (equal? value n)]
-		     [else #f]))
+                 (define/public (&== block n)
+                   (match n
+                     [(? (lambda (x) (send Fixnum instance? x)))
+                      (equal? value
+                              (get-field value n))]
+                     [(? number?) (equal? value n)]
+                     [else #f]))
 
                  (define/public (&+ n b)
                    (let ((n-value (get-field value n)))
@@ -130,6 +130,11 @@
 
                  (super-new)))))
 
+(define (fixnum->number number)
+  (cond
+    [(number? number) number]
+    [(send Fixnum instance? number) (get-field value number)]))
+
 (provide Array)
 (define Array
   (new RubyClass
@@ -146,25 +151,66 @@
 		 (define/public (hash block)
 		   (send Fixnum new #f (equal-hash-code value)))
 
-		 (define/public (splice low high expression)
-                   (set! value (append (drop value low)
-				       (list expression)
-				       (take value high))))
+         (define/public (compact! block)
+           (set! value (filter (lambda (x) (not (nil? x))) value)))
+
+         (define/public (fill block with-value [start 0] [range (length value)])
+           (set! value (append (take value start)
+                               (for ([i (in-range 
+                                          (fix-range (fixnum->number range))
+                                          range)])
+                                 i)))
+           this)
+
+         (define/public (pop block)
+           (define return (list-ref value (sub1 (length value))))
+           (set! value (take value (sub1 (length value))))
+           return)
+
+         (define (negative x)
+           (< x 0))
+
+         ;; negative numbers wrap around starting from the end
+         (define (fix-range position)
+           (match position
+             [(? negative x)
+              (+ x (length value))]
+             [x x]))
+
+         ;; x = [0,1,2,3,4,5]
+         ;; x[1,3] = 10
+         ;; x == [0, 10, 4, 5]
+		 (define/public (splice position range expression)
+           (define real-position (fix-range (fixnum->number position)))
+           (define real-range (min (- (length value) real-position)
+                                   range))
+           (set! value (append (take value real-position)
+                               (list expression)
+                               (drop value (+ real-position real-range))))
+           this
+
+           #|
+           (printf "splice ~a to ~a with ~a\n" low high expression)
+           (set! value (append (drop value (fixnum->number low))
+                               (list expression)
+                               (take value (fixnum->number high))))
+           |#
+           )
 
 		 (define/public (get-item arg)
-                   (list-ref value arg))
+           (list-ref value (fix-range (fixnum->number arg))))
 
 		 (define/public (get-item-range low high)
 		   (make (take (drop value low)
-			       (- high low))))
+                       (- high low))))
 
 		 (define/public (&& block arg)
-                   (make (set-map (set-intersect (apply set value) (apply set (get-field value arg))) values)))
+           (make (set-map (set-intersect (apply set value) (apply set (get-field value arg))) values)))
 
 		 (define/public (&or block arg)
-                   (make (set-map (set-union (apply set value)
-					     (apply set (get-field value arg)))
-				  values)))
+           (make (set-map (set-union (apply set value)
+                                     (apply set (get-field value arg)))
+                          values)))
 
 		 (define/public (&- block arg)
 		   (make (set-map (set-subtract (apply set value)
@@ -203,17 +249,17 @@
 		 (define/public (&!= block arg)
 		   (not (equal? value (send arg get-values))))
 
-                 (define/public (each func)
-                   (for/last ((i value))
-                             (send func call #f i)))
+         (define/public (each func)
+           (for/last ([i value])
+                     (send func call #f i)))
 
-                 (define/public (inject func start)
-                   (foldl (lambda (new accum)
-                            (send func call #f accum new))
-                          start
-                          value))
+         (define/public (inject func start)
+           (foldl (lambda (new accum)
+                    (send func call #f accum new))
+                  start
+                  value))
 
-                 (super-new)))))
+         (super-new)))))
 
 (provide puts)
 (define (puts block value)
