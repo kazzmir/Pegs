@@ -156,9 +156,9 @@
 
          (define/public (fill block with-value [start 0] [range (length value)])
            (set! value (append (take value start)
-                               (for ([i (in-range 
-                                          (fix-range (fixnum->number range))
-                                          range)])
+                               (for/list ([i (in-range 
+                                               (fix-range (fixnum->number range))
+                                               range)])
                                  i)))
            this)
 
@@ -217,16 +217,16 @@
 					     (apply set (get-field value arg)))
 				  values)))
 
-                 (define/override (to_s b)
-                   (let ((vs (map (lambda (v)
-                                    (if (number? v)
-                                      (send String new #f (number->string v))
-                                      (send v to_s b)))
-                                  value)))
-                     (send String new #f (apply string-append ""
-                                                         (map (lambda (s)
-                                                                (send s &ruby->native))
-                                                              vs)))))
+         (define/override (to_s b)
+           (let ((vs (map (lambda (v)
+                            (if (number? v)
+                              (send String new #f (number->string v))
+                              (send v to_s b)))
+                          value)))
+             (send String new #f (apply string-append ""
+                                        (map (lambda (s)
+                                               (send s &ruby->native))
+                                             vs)))))
 
 		 (define/public (&* block arg)
 		   (match arg
