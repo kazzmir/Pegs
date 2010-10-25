@@ -1,5 +1,5 @@
 all:
-	raco make ruby.ss main.ss translate.ss
+	raco make ruby.rkt main.rkt translate.rkt
 
 clean:
 	rm -rf compiled

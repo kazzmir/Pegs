@@ -24,7 +24,7 @@
 ;; Can parse 4.469kB/s as of r1466 on a 1.8ghz Pentium4 with mzscheme 4.1.2.5
 
 (require "../peg.ss")
-(require "ast.ss")
+(require "ast.rkt")
 (require racket/match)
 
 (provide pretty-print

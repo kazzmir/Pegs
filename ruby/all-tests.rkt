@@ -1,8 +1,8 @@
 #lang scheme
 
 
-(require (only-in "peg.ss" dump-statistics))
-(require "ruby.ss")
+(require (only-in "../peg.rkt" dump-statistics))
+(require "ruby.rkt")
 (require srfi/13)
 
 (define failed-dirs '("tests/failing/mine"

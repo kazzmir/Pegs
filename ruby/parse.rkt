@@ -1,6 +1,6 @@
 #lang scheme
 
-(require "ruby.ss")
+(require "ruby.rkt")
 
 (define (doit file)
   (if (parse (string->path file))

@@ -6,8 +6,8 @@
 (require racket/match
          (for-syntax racket/base))
 
-(require "ast.ss"
-         "ruby.ss")
+(require "ast.rkt"
+         "ruby.rkt")
 
 (define no-ctxt-stx (read-syntax #f (open-input-string "Ruby")))
 

@@ -4,8 +4,8 @@
 #:read-syntax ruby-read-syntax
 #:whole-body-readers? #t
 
-(require "../ruby.ss"
-         "../translate.ss"
+(require "../ruby.rkt"
+         "../translate.rkt"
          (only-in racket/pretty pretty-format))
 
 (define (ruby-read port)

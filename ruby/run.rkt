@@ -1,7 +1,7 @@
 #lang racket/base
 
-(require (only-in "peg.ss" dump-statistics dump-liner))
-(require "ruby.ss")
+(require (only-in "../peg.rkt" dump-statistics dump-liner))
+(require "ruby.rkt")
 (require racket/cmdline)
 
 (define (doit file)
