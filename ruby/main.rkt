@@ -4,7 +4,10 @@
 	 racket/match
 	 racket/list
 	 racket/set
+     "debug.rkt"
 	 (for-syntax racket/base))
+
+(define logger (make-logger 'ruby (current-logger)))
 
 #|
 (let ((global Nil) ...)
@@ -155,7 +158,8 @@
            (set! value (filter (lambda (x) (not (nil? x))) value)))
 
          (define/public (fill block with-value [start 0] [range (length value)])
-           (set! value (append (take value start)
+           (debug "at fill args are ~a ~a ~a ~a\n" block with-value start range)
+           (set! value (append (take value (fix-range (fixnum->number start)))
                                (for/list ([i (in-range 
                                                (fix-range (fixnum->number range))
                                                range)])
@@ -167,13 +171,10 @@
            (set! value (take value (sub1 (length value))))
            return)
 
-         (define (negative x)
-           (< x 0))
-
          ;; negative numbers wrap around starting from the end
          (define (fix-range position)
            (match position
-             [(? negative x)
+             [(? negative? x)
               (+ x (length value))]
              [x x]))
 

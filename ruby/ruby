@@ -1,4 +1,5 @@
 #!/bin/sh
 
 export PLTCOLLECTS=$PLTCOLLECTS:`pwd`/..
-racket $*
+# make
+racket -t "compile.rkt" -t $*
