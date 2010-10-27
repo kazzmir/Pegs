@@ -3,6 +3,7 @@
 (require racket/class
 	 racket/match
 	 racket/list
+     racket/contract
 	 racket/set
      "debug.rkt"
 	 (for-syntax racket/base))
@@ -76,15 +77,15 @@
   (new RubyClass
        (name "Boolean")
        (instance-class
-	 (class* ObjectClass ()
-		 (init-field value)
+         (class* ObjectClass ()
+                 (init-field value)
 
-		 (define/public (&&& block bool)
+                 (define/public (&&& block bool)
                    (equal? value (if (boolean? bool)
-				   bool
-				   (get-field value bool))))
+                                   bool
+                                   (get-field value bool))))
 
-		 (super-new)))))
+                 (super-new)))))
 
 (provide Fixnum)
 (define Fixnum
@@ -111,11 +112,11 @@
                      [(? number?) (equal? value n)]
                      [else #f]))
 
-                 (define/public (&+ n b)
-                   (let ((n-value (get-field value n)))
+                 (define/public (&+ b n)
+                   (let ([n-value (get-field value n)])
                      (make (+ value n-value))))
 
-                 (define/public (&- n b)
+                 (define/public (&- b n)
                    (let ((n-value (get-field value n)))
                      (make (- value n-value))))
 
@@ -127,16 +128,28 @@
                              (send/apply b call #f
                                          (list (make i)))))
 
-                 (define/public (&< n b)
+                 (define/public (&< b n)
                    (let ((n-value (get-field value n)))
                      (< value n-value)))
 
                  (super-new)))))
 
-(define (fixnum->number number)
+(define Fixnum/c (make-flat-contract #:name 'Fixnum #:first-order
+                                (lambda (x)
+                                  (send Fixnum instance? x))))
+
+(define/contract (fixnum->number number)
+                 (-> (or/c Fixnum/c number?) number?)
   (cond
     [(number? number) number]
-    [(send Fixnum instance? number) (get-field value number)]))
+    [(send Fixnum instance? number) (get-field value number)]
+    [else (error 'fixnum->number "not a fixnum or a number ~a" number)]
+    ))
+
+(define (racket->ruby value)
+  (cond
+    [(number? value) (send Fixnum new #f value)]
+    [else (error 'racket->ruby "don't know how to convert ~a" value)]))
 
 (provide Array)
 (define Array
@@ -157,13 +170,48 @@
          (define/public (compact! block)
            (set! value (filter (lambda (x) (not (nil? x))) value)))
 
-         (define/public (fill block with-value [start 0] [range (length value)])
-           (debug "at fill args are ~a ~a ~a ~a\n" block with-value start range)
-           (set! value (append (take value (fix-range (fixnum->number start)))
+         (define (fill-number block with-value start range)
+           (set! value (append (take value start)
                                (for/list ([i (in-range 
                                                (fix-range (fixnum->number range))
                                                range)])
-                                 i)))
+                                 (if block
+                                   (block with-value)
+                                   with-value)))))
+
+         (define no-value (gensym))
+         (define (fill-sequence block with-value range)
+           (define starting #f)
+           (define ending #f)
+           (define filled (for/list ([index range])
+                            (define fixed (fix-range index))
+                            (when (or (not starting)
+                                      (< fixed starting))
+                              (set! starting fixed))
+                            (when (or (not ending)
+                                      (> fixed ending))
+                              (set! ending fixed))
+                            (cond
+                              [(and block (not (eq? with-value no-value)))
+                               (send block call #f with-value)]
+                              [(and block (eq? with-value no-value))
+                               (send block call #f (racket->ruby fixed))]
+                              [else with-value])))
+           (set! value (append (take value (or starting 0))
+                               filled
+                               (drop value (min (or ending (length value))
+                                                (length value))))))
+
+         (define/public (fill block [with-value no-value] [start 0] [range (length value)])
+           (debug "at fill args are block ~a with-value ~a start ~a range ~a\n" block with-value start range)
+           ;; (define real-start (fix-range (fixnum->number start)))
+           (cond
+             [(sequence? with-value) (fill-sequence block no-value with-value)]
+             [(sequence? start) (fill-sequence block with-value start)]
+             [else (fill-number block with-value
+                                (fix-range (fixnum->number start))
+                                (fix-range (fixnum->number range)))])
+           
            this)
 
          (define/public (pop block)
@@ -183,8 +231,9 @@
          ;; x == [0, 10, 4, 5]
 		 (define/public (splice position range expression)
            (define real-position (fix-range (fixnum->number position)))
-           (define real-range (min (- (length value) real-position)
-                                   range))
+           (define real-range (min (- (length value)
+                                      real-position)
+                                   (fixnum->number range)))
            (set! value (append (take value real-position)
                                (list expression)
                                (drop value (+ real-position real-range))))
@@ -238,7 +287,7 @@
 			  [else
 			    (define new-values
 			      (apply append
-				     (for/list ([i (in-range 0 arg)])
+				     (for/list ([i (in-range 0 (fixnum->number arg))])
 					       value)))
 			    (send Array new #f new-values)]))
 
@@ -359,28 +408,28 @@
          (let ([math-op (memq (syntax->datum #'fop) '(&- &+ &< &> &<= &>=))])
            (syntax-case #'args (&Call-args)
              ((&Call-args (cargs ...) crest cblock)
-              (with-syntax ([(cargs-eval ...) (generate-temporaries #'(cargs ...))]
-			    )
+              (with-syntax ([(cargs-eval ...) (generate-temporaries #'(cargs ...))])
                 (if math-op
-		  #'(let ([object-eval object]
-			  [cargs-eval cargs]
-			  ...)
-		      (cond
-			[(and (number? object-eval)
-			      (number? cargs-eval)
-			      ...)
-			   (fop object-eval cargs-eval ...)]
-			[else (send/apply object-eval fop fblock
-				    (append (list cargs-eval ...) '()))]))
-		  #'(let ([object-eval object])
-		      (send/apply (cond
-				    [(number? object-eval)
-				     (send Fixnum new #f object-eval)]
-				    [(boolean? object-eval)
-				     (send Boolean new #f object-eval)]
-				    [else object-eval])
-				  fop fblock
-				  (append (list cargs ...) '())))))))))))))
+                  #'(let ([object-eval object]
+                          [cargs-eval cargs]
+                          ...)
+                      (cond
+                        #;
+                        [(and (number? object-eval)
+                              (number? cargs-eval)
+                              ...)
+                         (fop object-eval cargs-eval ...)]
+                        [else (send/apply object-eval fop fblock
+                                          (append (list cargs-eval ...) '()))]))
+                  #'(let ([object-eval object])
+                      (send/apply (cond
+                                    [(number? object-eval)
+                                     (send Fixnum new #f object-eval)]
+                                    [(boolean? object-eval)
+                                     (send Boolean new #f object-eval)]
+                                    [else object-eval])
+                                  fop fblock
+                                  (append (list cargs ...) '())))))))))))))
 
 (define-syntax* &Class
   (lambda (stx)
@@ -462,13 +511,13 @@
     ((&Normal-argument id)
      (make-variable-id (do-id #'id)))))
 
-(provide (rename-out (- &-) (+ &+) (< &<)
-		     (+ racket:+)
-		     (not racket:not)
-		     (regexp racket:regexp)
-		     )
-	 quote
-	 )
+(provide (rename-out (- &-)
+                     #;
+                     (+ &+)
+                     (< &<)
+                     (not racket:not)
+                     (regexp racket:regexp))
+         quote)
 
 (provide defined?)
 (define (defined? something)
@@ -516,7 +565,7 @@
 
 (define-syntax* &Number
   (syntax-rules ()
-    ((_ v) v)))
+    ((_ v) (send Fixnum new #f v))))
 
 (define-syntax* &String-literal
   (lambda (stx)
@@ -568,7 +617,20 @@
 (define-syntax* (&Range stx)
   (syntax-case stx ()
     [(_ low high)
-     #'(in-range low high)]))
+     #'(let ([high-number (fixnum->number high)]
+             [low-number (fixnum->number low)])
+         (if (< high-number low-number)
+           (in-range low-number high-number -1)
+           (in-range low-number high-number)))]))
+
+(define-syntax* (&Range-inclusive stx)
+  (syntax-case stx ()
+    [(_ low high)
+     #'(let ([high-number (fixnum->number high)]
+             [low-number (fixnum->number low)])
+         (if (< high-number low-number)
+           (in-range low-number (- 1 high-number) -1)
+           (in-range low-number (+ 1 high-number))))]))
 
 (define-syntax* &String-computation
   (syntax-rules ()
@@ -576,13 +638,16 @@
     (send (send expression to_s #f) &ruby->native)]))
   
 (define-syntax* (&Array-lookup stx)
-  (syntax-case stx (&Range)
+  (syntax-case stx (&Range &Range-inclusive)
     [(_ object start end)
      (with-syntax ([var (variable #'object)])
-       #'(send var get-item-range start end))]
+       #'(send var get-item-range (fixnum->number start) (fixnum->number end)))]
     [(_ object (&Range low high))
      (with-syntax ([var (variable #'object)])
-       #'(send var get-item-range low high))]
+       #'(send var get-item-range (fixnum->number low) (fixnum->number high)))]
+    [(_ object (&Range-inclusive low high))
+     (with-syntax ([var (variable #'object)])
+       #'(send var get-item-range (fixnum->number low) (+ 1 (fixnum->number high))))]
     [(_ object item)
      (with-syntax ([var (variable #'object)])
        #'(send var get-item item))]))

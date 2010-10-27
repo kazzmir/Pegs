@@ -111,7 +111,7 @@
                     loc pos))]
 
       [(struct Range-inclusive (loc pos start end))
-       (make/loc* `(&Range ,(loop start) (racket:+ 1 ,(loop end)))
+       (make/loc* `(&Range-inclusive ,(loop start) ,(loop end))
                   loc pos)]
 
       [(struct Range-exclusive (loc pos start end))
