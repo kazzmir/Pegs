@@ -6,6 +6,7 @@
      racket/contract
 	 racket/set
      "debug.rkt"
+     (for-syntax "debug.rkt")
 	 (for-syntax racket/base))
 
 (define logger (make-logger 'ruby (current-logger)))
@@ -57,10 +58,19 @@
          (class* ObjectClass ()
                  (init-field value)
                  (define/override (to_s b) this)
+         (define (remove-newline value)
+           (if (and (> (string-length value) 0)
+                    (char=? (string-ref value (sub1 (string-length value))) #\newline))
+             (substring value 0 (sub1 (string-length value)))
+             value))
+         (define/public (chomp block)
+           (send String new #f (remove-newline value)))
+         (define/public (&== block arg)
+		   (equal? value (send (send arg to_s #f) &ruby->native)))
 		 (define/public (&!= block arg)
-		   (equal? value (send arg &ruby->native)))
-                 (define/public (&ruby->native) value)
-                 (super-new)))))
+           (not (&== block arg)))
+         (define/public (&ruby->native) value)
+         (super-new)))))
 
 (provide Proc)
 (define Proc
@@ -170,6 +180,9 @@
          (define/public (compact! block)
            (set! value (filter (lambda (x) (not (nil? x))) value)))
 
+         (define/public (find_all block)
+           (make (filter (lambda (x) (send block call #f x)) value )))
+
          (define (fill-number block with-value start range)
            (set! value (append (take value start)
                                (for/list ([i (in-range 
@@ -273,17 +286,18 @@
                               (send String new #f (number->string v))
                               (send v to_s b)))
                           value)))
-             (send String new #f (apply string-append ""
+             (send String new #f (apply string-append
                                         (map (lambda (s)
-                                               (send s &ruby->native))
+                                               (send (send s to_s #f) &ruby->native))
                                              vs)))))
 
 		 (define/public (&* block arg)
 		   (match arg
 			  [(? (lambda (x) (send String instance? x)))
 			   (send String new #f
-				 (map (lambda (x) format "~a" x)
-				      (add-between value (send arg &ruby->native))))]
+                     (apply string-append
+                            (map (lambda (x) (send (send x to_s #f) &ruby->native))
+                                 (add-between value arg))))]
 			  [else
 			    (define new-values
 			      (apply append
@@ -520,7 +534,7 @@
          quote)
 
 (provide defined?)
-(define (defined? something)
+(define (defined? block something)
   #t)
 
 ;; all operations should be method calls
@@ -569,11 +583,35 @@
 
 (define-syntax* &String-literal
   (lambda (stx)
+    (define (append-all stuff)
+      (syntax-case stuff ()
+        [(a b rest ...)
+         (if (and (string? (syntax-e #'a))
+                  (string? (syntax-e #'b)))
+           (with-syntax ([both (string-append (syntax-e #'a) (syntax-e #'b))])
+             (append-all #'(both rest ...)))
+           (with-syntax ([more (append-all #'(b rest ...))])
+             #;
+             (debug "a is ~a -- `~a' string? ~a\n" #'a (syntax-e #'a) (string? (syntax-e #'a)))
+             (if (string? (syntax-e #'a))
+               #'(string-append a more)
+               #'(if (string? a)
+                   (string-append a more)
+                   (string-append (send (send a to_s #f) &ruby->native) more))
+               #;
+               #'(string-append (send a &ruby->native) more)))
+           )]
+        [(a rest ...) (with-syntax ([more (append-all #'(rest ...))])
+                        (if (string? (syntax-e #'a))
+                          #'(string-append a more)
+                          #'(if (string? a)
+                              (string-append a more)
+                              (string-append (send (send a to_s #f) &ruby->native) more))))]
+        [() #'""]))
     (syntax-case stx ()
-      ((_ v ...) #'(send String new #f 
-                        (apply string-append "" (list v ...)))))))
-
-
+      [(_ v ...)
+       (with-syntax ([result (append-all #'(v ...))])
+         #'(send String new #f result))])))
 
 (define-syntax* &Function-call
   (lambda (stx)
