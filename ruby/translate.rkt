@@ -43,8 +43,12 @@
                         (inner-loop (cons (loop name) names) (cdr stmts)))
                        (else (inner-loop names (cdr stmts)))))))))
   (define (build-regexp contents)
-    ;; FIXME
-    #f
+    (debug "regexp contents ~a\n" contents)
+    (apply string-append
+           (for/list ([item contents])
+             (match item
+               [(Regexp-char loc pos value) value]
+               [(Regexp-escaped loc pos value) (format "\\~a" value)])))
     )
   (define (loop ast)
     (match ast
