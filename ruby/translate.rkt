@@ -52,19 +52,19 @@
     )
   (define (loop ast)
     (match ast
-      ((struct Program (loc pos compstmt))
+      [(struct Program (loc pos compstmt))
        (debug "Program ~a\n" compstmt)
        (make/loc* `(&Program ,(loop compstmt))
-                  loc pos))
-      ((struct Identifier (loc pos name))
+                  loc pos)]
+      [(struct Identifier (loc pos name))
        (debug "Identifier ~a\n" name)
        (make/loc* `(&Identifier ,(make/loc* (string->symbol name) loc pos))
-                  loc pos))
+                  loc pos)]
 
       ;; is this right?
-      ((struct Constant (loc pos name))
+      [(struct Constant (loc pos name))
        (make/loc* `(&Constant ,(make/loc* (string->symbol name) loc pos))
-                  loc pos))
+                  loc pos)]
 
       [(struct Normal-argument (loc pos id))
        (debug "Normal-argument ~a\n" id)
@@ -122,14 +122,14 @@
        (make/loc* `(&Range ,(loop start) ,(loop end))
                   loc pos)]
 
-      ((struct Array (loc pos args))
+      [(struct Array (loc pos args))
        (debug "Array ~a\n" args)
-       (make/loc* `(&Array ,@(map loop args)) loc pos))
+       (make/loc* `(&Array ,@(map loop args)) loc pos)]
 
-      ((struct Variable (loc pos var))
-       (make/loc* `(&Variable ,(loop var)) loc pos))
+      [(struct Variable (loc pos var))
+       (make/loc* `(&Variable ,(loop var)) loc pos)]
 
-      ((struct Block (loc pos vars body))
+      [(struct Block (loc pos vars body))
        (debug "Block ~a ~a\n" vars body)
        (let ((vs (match vars
                    ((struct Empty-var (loc pos)) '())
@@ -137,46 +137,46 @@
                    ((struct Mlhs (loc pos vars rest))
                     (map loop vars)))))
 
-         (make/loc* `(&Block (,@vs) ,(loop body)) loc pos)))
+         (make/loc* `(&Block (,@vs) ,(loop body)) loc pos))]
 
-      ((struct String-escaped (loc pos value))
+      [(struct String-escaped (loc pos value))
        (case value
-         ((#\n) (make/loc* "\n" loc pos))))
+         ((#\n) (make/loc* "\n" loc pos)))]
 
-      ((struct String-char (loc pos value))
-       (make/loc* value loc pos))
+      [(struct String-char (loc pos value))
+       (make/loc* value loc pos)]
 
-      ((struct String-literal (loc pos str))
+      [(struct String-literal (loc pos str))
        (make/loc* `(&String-literal ,@(map loop str))
-                  loc pos))
+                  loc pos)]
 
       ;; fix
-      ((struct Body (loc pos body else rescue ensure))
+      [(struct Body (loc pos body else rescue ensure))
        (debug "Body ~a ~a ~a ~a\n" body else rescue ensure)
-       (make/loc* `(&Body ,(loop body)) loc pos))
+       (make/loc* `(&Body ,(loop body)) loc pos)]
 
-      ((struct Else (loc pos body))
-       (loop body))
+      [(struct Else (loc pos body))
+       (loop body)]
 
-      ((struct If-statement (loc pos condition body elseifs else))
+      [(struct If-statement (loc pos condition body elseifs else))
        (debug "If ~a ~a ~a ~a\n" condition body elseifs else)
        (make/loc* `(&If ,(loop condition) ,(loop body)
                         (,@(map loop elseifs))
                         ,(if else (loop else) '(void)))
-                  loc pos))
+                  loc pos)]
 
-      ((struct Elseif (loc pos cond body))
+      [(struct Elseif (loc pos cond body))
        (debug "Elseif ~a ~a\n" cond body)
-       (make/loc* `(&Elseif ,(loop cond) ,(loop body)) loc pos))
+       (make/loc* `(&Elseif ,(loop cond) ,(loop body)) loc pos)]
 
-      ((struct Lhs (loc pos var))
-       (loop var))
+      [(struct Lhs (loc pos var))
+       (loop var)]
 
-      ((struct Assignment (loc pos lhs expr))
+      [(struct Assignment (loc pos lhs expr))
        (make/loc* `(&Assignment ,(loop lhs) ,(loop expr))
-                  loc pos))
+                  loc pos)]
 
-      ((struct Function-arglist (loc pos args rest block))
+      [(struct Function-arglist (loc pos args rest block))
        (debug "Function-arglist ~a ~a ~a\n" args rest block)
        (make/loc* `(&Function-arglist (args ,@(map (lambda (a)
                                                      (loop a)) args))
@@ -190,13 +190,13 @@
                      (rest (if rest (ruby->s-expr rest) (gensym)))
                      (block (if block (ruby->s-expr block) (gensym))))
          (make/loc #'(#:block block args ... . rest)
-                   source loc pos)))
+                   source loc pos))]
 
       [(struct Multiple-assignment (location span left-hand right-hand))
        ;; FIXME
        (make/loc* `(void) location span)]
 
-      ((struct Call-args (loc pos args rest block))
+      [(struct Call-args (loc pos args rest block))
        (debug "Call-args ~a ~a ~a\n" args rest block)
        (make/loc* `(&Call-args (,@(map (lambda (a)
                                          (loop a)) args))
@@ -209,9 +209,9 @@
                      (block (if block (ruby->s-expr block) #f)))
          (make/loc #'(append (list args ...)
                              rest)
-                   source loc pos)))
+                   source loc pos))]
 
-      ((struct Method-call (loc pos object op args block))
+      [(struct Method-call (loc pos object op args block))
        (debug "Method-call ~a ~a ~a ~a\n" object op args block)
        (make/loc* `(&Method-call ,(loop object)
                                  ,(loop op)
@@ -219,10 +219,10 @@
                                  ,(if block
                                     (loop block)
                                     (make/loc* #f loc pos)))
-                  loc pos))
+                  loc pos)]
 
       ;; fix
-      ((struct Function-call (loc pos op args block))
+      [(struct Function-call (loc pos op args block))
        (debug "Function-call ~a ~a ~a\n" op args block)
        (make/loc* `(&Function-call (op ,(loop op))
                                    (args ,(loop args))
@@ -239,26 +239,26 @@
                                       (block (if block (ruby->s-expr block) #'#f)))
                           #'(apply op #:block block (append (list margs ...) rest)))
                         loc pos))))
-                 source loc pos))
+                 source loc pos)]
 
-      ((struct Class-statement (loc pos name super body))
+      [(struct Class-statement (loc pos name super body))
        (debug "Class ~a ~a ~a\n" name super body)
        (make/loc* `(&Class ,(loop name)
                            ,(if super (loop super) (make/loc* #f loc pos))
                            ,(loop body)
                            ,(find-definitions body))
-                  loc pos))
+                  loc pos)]
 
-      ((struct Compstmt (loc pos stmts))
+      [(struct Compstmt (loc pos stmts))
        (debug "Compstmt ~a\n" stmts)
        (make/loc* `(&Compstmt ,@(map (lambda (s)
                                        (loop s)) stmts))
-                  loc pos))
+                  loc pos)]
 
       [(struct True (loc pos))
        (make/loc* '#t loc pos)]
 
-      ((struct Definition-statement (loc pos name args body))
+      [(struct Definition-statement (loc pos name args body))
        (debug "Definition-statement ~a ~a ~a\n" name args body)
        (make/loc* `(&Definition-statement (name ,(loop name))
                                           (args ,(loop args))
@@ -270,13 +270,13 @@
                      (body (ruby->s-expr body)))
          (make/loc #'(define name (lambda args
                                     body))
-                   loc pos)))
+                   loc pos))]
 
-      ((struct Number (loc pos value))
+      [(struct Number (loc pos value))
        (debug "Number ~a\n" value)
-       (make/loc* `(&Number ,(make/loc* value loc pos)) loc pos))
+       (make/loc* `(&Number ,(make/loc* value loc pos)) loc pos)]
 
-      ((struct Operation (loc pos op arg1 arg2))
+      [(struct Operation (loc pos op arg1 arg2))
        (debug "Operation ~a ~a ~a\n" op arg1 arg2)
        (loop (make-Method-call loc pos arg1 op (make-Call-args loc pos (list arg2) #f #f) #F))
        #;
@@ -288,11 +288,10 @@
        (make/loc* `(&Operation ,(loop op)
                                ,(loop arg1)
                                ,(loop arg2))
-                  loc pos))
-      [else (error 'translate "don't know how to translate ~a originally as `~a' at position ~a to ~a" ast (pretty-print ast)
-                   (Location-position ast)
-                   (+ (Location-position ast)
-                      (Location-span ast)))]
+                  loc pos)]
+      [(struct Location (position span))
+       (error 'translate "don't know how to translate ~a originally as `~a' at position ~a to ~a" ast (pretty-print ast) position (+ position span))]
+      [else (error 'translate "expected an AST structure but got ~a" ast)]
       ))
   (loop ruby-ast))
 
