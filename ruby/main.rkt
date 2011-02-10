@@ -66,7 +66,7 @@
          (define/public (chomp block)
            (send String new #f (remove-newline value)))
          (define/public (&== block arg)
-		   (equal? value (send (send arg to_s #f) &ruby->native)))
+		   (equal? value (send (send (convert-to-object arg) to_s #f) &ruby->native)))
          (define/public (scan block arg)
            (regexp-match arg value))
 		 (define/public (&!= block arg)
@@ -298,12 +298,12 @@
 			  [(? (lambda (x) (send String instance? x)))
 			   (send String new #f
                      (apply string-append
-                            (map (lambda (x) (send (send x to_s #f) &ruby->native))
+                            (map (lambda (x) (send (send (convert-to-object x) to_s #f) &ruby->native))
                                  (add-between value arg))))]
 			  [else
 			    (define new-values
 			      (apply append
-				     (for/list ([i (in-range 0 (fixnum->number arg))])
+				     (for/list ([i (in-range 0 (fixnum->number (convert-to-object arg)))])
 					       value)))
 			    (send Array new #f new-values)]))
 
@@ -418,6 +418,12 @@
     [(_ x) (if (number? x) x
              (get-field value x))]))
 
+(define-syntax* convert-to-object
+  (syntax-rules ()
+    [(_ x) (cond
+             [(number? x) (send Fixnum new #f x)]
+             [else x])]))
+
 (define-syntax* &Method-call
   (lambda (stx)
     (syntax-case stx ()
@@ -443,7 +449,9 @@
                               ...)
                          (fop object-eval cargs-eval ...)]
                         [else (send/apply object-eval fop fblock
-                                          (append (list cargs-eval ...) '()))]))
+                                          (append (list (convert-to-object cargs-eval)
+                                                        ...)
+                                                  '()))]))
                   #'(let ([object-eval object])
                       (send/apply (cond
                                     [(number? object-eval)
@@ -684,7 +692,7 @@
 (define-syntax* &String-computation
   (syntax-rules ()
    [(_ expression)
-    (send (send expression to_s #f) &ruby->native)]))
+    (send (send (convert-to-object expression) to_s #f) &ruby->native)]))
   
 (define-syntax* (&Array-lookup stx)
   (syntax-case stx (&Range &Range-inclusive)
