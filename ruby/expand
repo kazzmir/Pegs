@@ -3,4 +3,4 @@
 export PLTCOLLECTS=$PLTCOLLECTS:`pwd`/..
 # make
 # racket $*
-racket -l errortrace -t $*
+raco expand $*

@@ -67,6 +67,8 @@
            (send String new #f (remove-newline value)))
          (define/public (&== block arg)
 		   (equal? value (send (send arg to_s #f) &ruby->native)))
+         (define/public (scan block arg)
+           (regexp-match arg value))
 		 (define/public (&!= block arg)
            (not (&== block arg)))
          (define/public (&ruby->native) value)
@@ -411,6 +413,11 @@
     ((lexical) #t)
     (else #f)))
 
+(define-syntax* convert-to-number
+  (syntax-rules ()
+    [(_ x) (if (number? x) x
+             (get-field value x))]))
+
 (define-syntax* &Method-call
   (lambda (stx)
     (syntax-case stx ()
@@ -428,6 +435,8 @@
                           [cargs-eval cargs]
                           ...)
                       (cond
+                        [(number? object-eval)
+                         (+ object-eval (convert-to-number cargs-eval) ...)]
                         #;
                         [(and (number? object-eval)
                               (number? cargs-eval)
@@ -579,6 +588,8 @@
 
 (define-syntax* &Number
   (syntax-rules ()
+    [(_ v) v]
+    #;
     ((_ v) (send Fixnum new #f v))))
 
 (define-syntax* &String-literal
