@@ -3,6 +3,8 @@
 (require racket/class
 	 racket/match
 	 racket/list
+     (prefix-in racket: racket/base)
+     (only-in srfi/13 string-reverse)
      racket/contract
 	 racket/set
      "debug.rkt"
@@ -28,15 +30,15 @@
           (init-field name)
 
 	  (define/public (instance? thing)
-            (is-a? thing instance-class))
+        (is-a? thing instance-class))
 
-          (define/public (new b . args)
-            (apply make-object instance-class args))
+      (define/public (new b . args)
+        (apply make-object instance-class args))
 
-          (define/public (to_s b)
-            (send String new b name))
+      (define/public (to_s b)
+        (send String new b name))
 
-          (super-new)))
+      (super-new)))
 
 (define ObjectClass
   (class* object% ()
@@ -58,17 +60,40 @@
          (class* ObjectClass ()
                  (init-field value)
                  (define/override (to_s b) this)
+         (define (make string)
+           (send String new #f string))
          (define (remove-newline value)
            (if (and (> (string-length value) 0)
                     (char=? (string-ref value (sub1 (string-length value))) #\newline))
              (substring value 0 (sub1 (string-length value)))
              value))
          (define/public (chomp block)
-           (send String new #f (remove-newline value)))
+           (make (remove-newline value)))
+
+         ;; FIXME!
+         (define/public (split block [arg ""])
+           (send Array new #f '()))
+
          (define/public (&== block arg)
 		   (equal? value (send (send (convert-to-object arg) to_s #f) &ruby->native)))
+         (define/public (reverse block)
+           (make (string-reverse value)))
+         (define/public (reverse! block)
+           (set! value (send (reverse block) &ruby->native))
+           this)
+
+         (define/public (&<=> block arg)
+           (if (send String instance? arg)
+             (let ([him (send arg &ruby->native)])
+               (cond
+                 [(string=? value him) 0]
+                 [(string<=? value him) -1]
+                 [(string>=? value him) 1]))
+             (error 'String "can't compare String with ~a" arg)))
          (define/public (scan block arg)
            (send Array new #f (regexp-match* arg value)))
+         (define/public (deep-copy)
+           (send String new #f value))
 		 (define/public (&!= block arg)
            (not (&== block arg)))
          (define/public (&ruby->native) value)
@@ -113,8 +138,20 @@
                  (define/override (to_s b)
                    (send String new #f (format "~a" value)))
 
+                 (define/public (&<=> block arg)
+                   (if (send Fixnum instance? arg)
+                     (let ([him (get-field value arg)])
+                       (cond
+                         [(< value him) -1]
+                         [(= value him) 0]
+                         [(> value him) 1]))
+                     (error '<=> "Cannot compare Fixnum with ~a" arg)))
+
                  (define/public (&!= block n)
                    (not (&== block n)))
+
+                 (define/public (deep-copy)
+                   (make value))
 
                  (define/public (&== block n)
                    (match n
@@ -185,6 +222,50 @@
          (define/public (find_all block)
            (make (filter (lambda (x) (send block call #f x)) value )))
 
+         (define/public (sort block)
+           (make (racket:sort (get-values) (lambda (a b)
+                                             ;; todo: optimize for primitive types
+                                             (case (send (convert-to-object a)
+                                                         &<=> #f
+                                                         (convert-to-object b))
+                                               [(-1) #true]
+                                               [else #false])))))
+
+         (define/public (sort! block)
+           (set! value (send (sort block) get-values))
+           this)
+
+         ;; FIXME!
+         (define/public (uniq! block)
+           this)
+
+         (define/public (empty? block)
+           (null? (get-values)))
+
+         (define/public (size block)
+           (length (get-values)))
+
+         (define/public (deep-copy)
+           (send Array new #f (map do-deep-copy (get-values))))
+
+         (define/public (reverse block)
+           (make (racket:reverse value)))
+
+         (define/public (reverse! block)
+           (set! value (racket:reverse value))
+           this)
+
+         (define/public (concat block object)
+           (set! value (append value (send object get-values)))
+           this)
+
+         (define/public (clear block)
+           (set! value '())
+           this)
+
+         (define/public (dup block)
+           (deep-copy))
+
          (define (fill-number block with-value start range)
            (set! value (append (take value start)
                                (for/list ([i (in-range 
@@ -241,8 +322,8 @@
               (+ x (length value))]
              [x x]))
 
-         (define/public (join block separator)
-           (apply string-append (map (lambda (x) (convert-to-string x))
+         (define/public (join block [separator ""])
+           (apply string-append (map convert-to-string
                                      (add-between (get-values)
                                                   separator))))
 
@@ -255,7 +336,7 @@
                                       real-position)
                                    (fixnum->number range)))
            (set! value (append (take value real-position)
-                               (list expression)
+                               (list (do-deep-copy expression))
                                (drop value (+ real-position real-range))))
            this
 
@@ -286,6 +367,9 @@
 		   (make (set-map (set-subtract (apply set value)
 					     (apply set (get-field value arg)))
 				  values)))
+
+         (define/public (&<< block arg)
+           (concat block (make (list arg))))
 
          (define/override (to_s b)
            (let ((vs (map (lambda (v)
@@ -426,20 +510,26 @@
              (get-field value x))]))
 
 ;; produce a racket string from something (either a racket object or a ruby object)
-(define-syntax-rule (convert-to-string object)
+(define (convert-to-string object)
   (cond
     [(number? object) (number->string object)]
     [(string? object) object]
     [else (send (send (convert-to-object object) to_s #f)
                 &ruby->native)]))
 
-(define-syntax* convert-to-object
-  (syntax-rules ()
-    [(_ x) (cond
-             [(number? x) (send Fixnum new #f x)]
-             [(string? x) (send String new #f x)]
-             [(boolean? x) (send Boolean new #f x)]
-             [else x])]))
+(define (do-deep-copy object)
+  (cond
+    [(number? object) object]
+    [(string? object) object]
+    [(boolean? object) object]
+    [else (send object deep-copy)]))
+
+(define (convert-to-object object)
+  (cond
+    [(number? object) (send Fixnum new #f object)]
+    [(string? object) (send String new #f object)]
+    [(boolean? object) (send Boolean new #f object)]
+    [else object]))
 
 (define-syntax* &Method-call
   (lambda (stx)
@@ -518,13 +608,13 @@
       [(_ body0 body1 bodys ...)
        (syntax-case #'body0 (&Assignment &Array-lookup)
          [(&Assignment (&Array-lookup object start end)
-		       expression)
-	  (with-syntax ([var (variable #'object)])
+                       expression)
+          (with-syntax ([var (variable #'object)])
             (if (bound? #'var)
-	      #'(begin
-		  (send var splice start end expression)
-		  (&Compstmt body1 bodys ...))
-	      (raise-syntax-error "~a is unbound" #'var)))]
+              #'(begin
+                  (send var splice start end expression)
+                  (&Compstmt body1 bodys ...))
+              (raise-syntax-error "~a is unbound" #'var)))]
          [(&Assignment lhs expr)
           (with-syntax ((var (variable #'lhs)))
             (if (bound? #'var)
