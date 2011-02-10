@@ -68,7 +68,7 @@
          (define/public (&== block arg)
 		   (equal? value (send (send (convert-to-object arg) to_s #f) &ruby->native)))
          (define/public (scan block arg)
-           (regexp-match arg value))
+           (send Array new #f (regexp-match* arg value)))
 		 (define/public (&!= block arg)
            (not (&== block arg)))
          (define/public (&ruby->native) value)
@@ -241,6 +241,11 @@
               (+ x (length value))]
              [x x]))
 
+         (define/public (join block separator)
+           (apply string-append (map (lambda (x) (convert-to-string x))
+                                     (add-between (get-values)
+                                                  separator))))
+
          ;; x = [0,1,2,3,4,5]
          ;; x[1,3] = 10
          ;; x == [0, 10, 4, 5]
@@ -284,9 +289,11 @@
 
          (define/override (to_s b)
            (let ((vs (map (lambda (v)
+                            (send (convert-to-object v) to_s b)
+                            #;
                             (if (number? v)
                               (send String new #f (number->string v))
-                              (send v to_s b)))
+                              (send (convert-to-object v) to_s b)))
                           value)))
              (send String new #f (apply string-append
                                         (map (lambda (s)
@@ -418,10 +425,20 @@
     [(_ x) (if (number? x) x
              (get-field value x))]))
 
+;; produce a racket string from something (either a racket object or a ruby object)
+(define-syntax-rule (convert-to-string object)
+  (cond
+    [(number? object) (number->string object)]
+    [(string? object) object]
+    [else (send (send (convert-to-object object) to_s #f)
+                &ruby->native)]))
+
 (define-syntax* convert-to-object
   (syntax-rules ()
     [(_ x) (cond
              [(number? x) (send Fixnum new #f x)]
+             [(string? x) (send String new #f x)]
+             [(boolean? x) (send Boolean new #f x)]
              [else x])]))
 
 (define-syntax* &Method-call
@@ -453,7 +470,9 @@
                                                         ...)
                                                   '()))]))
                   #'(let ([object-eval object])
-                      (send/apply (cond
+                      (send/apply (convert-to-object object-eval)
+                                  #;
+                                  (cond
                                     [(number? object-eval)
                                      (send Fixnum new #f object-eval)]
                                     [(boolean? object-eval)
