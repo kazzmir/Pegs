@@ -154,6 +154,7 @@
                    (make value))
 
                  (define/public (&== block n)
+                   ;; (debug "fixnum == me ~a him ~a\n" value (get-field value n))
                    (match n
                      [(? (lambda (x) (send Fixnum instance? x)))
                       (equal? value
@@ -266,17 +267,19 @@
          (define/public (dup block)
            (deep-copy))
 
-         (define (fill-number block with-value start range)
+         (define/private (fill-number block with-value start range)
+           (debug "fill number with ~a start ~a range ~a\n" with-value start range)
+           (debug " before ~a\n" value)
            (set! value (append (take value start)
-                               (for/list ([i (in-range 
-                                               (fix-range (fixnum->number range))
-                                               range)])
+                               (for/list ([i (in-range start range)])
                                  (if block
-                                   (block with-value)
-                                   with-value)))))
+                                   (send block call #f with-value)
+                                   (do-deep-copy with-value)))))
+
+           (debug " after ~a\n" value))
 
          (define no-value (gensym))
-         (define (fill-sequence block with-value range)
+         (define/private (fill-sequence block with-value range)
            (define starting #f)
            (define ending #f)
            (define filled (for/list ([index range])
@@ -372,13 +375,13 @@
            (concat block (make (list arg))))
 
          (define/override (to_s b)
-           (let ((vs (map (lambda (v)
+           (let ([vs (map (lambda (v)
                             (send (convert-to-object v) to_s b)
                             #;
                             (if (number? v)
                               (send String new #f (number->string v))
                               (send (convert-to-object v) to_s b)))
-                          value)))
+                          value)])
              (send String new #f (apply string-append
                                         (map (lambda (s)
                                                (send (send s to_s #f) &ruby->native))
@@ -404,7 +407,14 @@
 		   (send Array new #f new-values))
 
 		 (define/public (&!= block arg)
-		   (not (equal? value (send arg get-values))))
+           (not (&== block arg)))
+
+         (define/public (&== block arg)
+           (and (= (length (get-values))
+                   (length (send arg get-values)))
+                (for/and ([mine (get-values)]
+                          [his (send arg get-values)])
+                         (ruby:equals? mine his))))
 
          (define/public (each func)
            (for/last ([i value])
@@ -420,7 +430,9 @@
 
 (provide puts)
 (define (puts block value)
-  (printf "~a\n" (let ((v* value))
+  (printf "~a\n" (convert-to-string value)
+          #;
+          (let ((v* value))
                    (if (number? v*)
                      v*
                      (send (send v* to_s block) &ruby->native)))))
@@ -509,10 +521,17 @@
     [(_ x) (if (number? x) x
              (get-field value x))]))
 
+(define (ruby:equals? object1 object2)
+  (send (convert-to-object object1)
+        &==
+        #f
+        (convert-to-object object2)))
+
 ;; produce a racket string from something (either a racket object or a ruby object)
 (define (convert-to-string object)
   (cond
     [(number? object) (number->string object)]
+    [(boolean? object) (if object "true" "false")]
     [(string? object) object]
     [else (send (send (convert-to-object object) to_s #f)
                 &ruby->native)]))
@@ -807,7 +826,7 @@
   (syntax-case stx (&Range &Range-inclusive)
     [(_ object start end)
      (with-syntax ([var (variable #'object)])
-       #'(send var get-item-range (fixnum->number start) (fixnum->number end)))]
+       #'(send var get-item-range (fixnum->number start) (+ 1 (fixnum->number end))))]
     [(_ object (&Range low high))
      (with-syntax ([var (variable #'object)])
        #'(send var get-item-range (fixnum->number low) (fixnum->number high)))]
