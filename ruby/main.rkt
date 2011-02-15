@@ -91,7 +91,22 @@
                  [(string>=? value him) 1]))
              (error 'String "can't compare String with ~a" arg)))
          (define/public (scan block arg)
-           (send Array new #f (regexp-match* arg value)))
+           (define scans
+             (let loop ([position 0]
+                        [all '()])
+               (define matched (regexp-match-positions arg value position))
+               (match matched
+                 [#f (racket:reverse all)]
+                 [(list whole groups ...)
+                  (if (null? groups)
+                    (loop (cdr whole) (cons whole all))
+                    (loop (cdr whole)
+                          (cons (send Array new #f (for/list ([position groups])
+                                                     (match position
+                                                       [(cons start end)
+                                                        (racket:substring value start end)])))
+                                all)))])))
+           (send Array new #f scans))
          (define/public (deep-copy)
            (send String new #f value))
 		 (define/public (&!= block arg)
@@ -107,6 +122,7 @@
          (class* ObjectClass ()
                  (init-field closure)
                  (define/public (call block . vals)
+                   (debug "closure ~a block ~a vals ~a\n" closure block vals)
                    (apply closure block vals))
                  (super-new)))))
 
@@ -268,12 +284,12 @@
            (deep-copy))
 
          (define/private (fill-number block with-value start range)
-           (debug "fill number with ~a start ~a range ~a\n" with-value start range)
+           (debug "fill number block ~a with ~a start ~a range ~a\n" block with-value start range)
            (debug " before ~a\n" value)
            (set! value (append (take value start)
                                (for/list ([i (in-range start range)])
                                  (if block
-                                   (send block call #f with-value)
+                                   (send block call #f (list-ref value i))
                                    (do-deep-copy with-value)))))
 
            (debug " after ~a\n" value))
@@ -410,7 +426,8 @@
            (not (&== block arg)))
 
          (define/public (&== block arg)
-           (and (= (length (get-values))
+           (and (send Array instance? arg)
+                (= (length (get-values))
                    (length (send arg get-values)))
                 (for/and ([mine (get-values)]
                           [his (send arg get-values)])
@@ -533,6 +550,7 @@
     [(number? object) (number->string object)]
     [(boolean? object) (if object "true" "false")]
     [(string? object) object]
+    [(regexp? object) (object-name object)]
     [else (send (send (convert-to-object object) to_s #f)
                 &ruby->native)]))
 
@@ -675,7 +693,7 @@
                      (+ &+)
                      (< &<)
                      (not racket:not)
-                     (regexp racket:regexp))
+                     (pregexp racket:regexp))
          quote)
 
 (provide defined?)
