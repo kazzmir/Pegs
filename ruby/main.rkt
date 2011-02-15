@@ -99,7 +99,12 @@
                  [#f (racket:reverse all)]
                  [(list whole groups ...)
                   (if (null? groups)
-                    (loop (cdr whole) (cons whole all))
+                    (loop (cdr whole)
+                          (cons
+                            (match whole
+                              [(cons start end)
+                               (racket:substring value start end)])
+                            all))
                     (loop (cdr whole)
                           (cons (send Array new #f (for/list ([position groups])
                                                      (match position
