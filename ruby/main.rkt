@@ -296,7 +296,8 @@
                                (for/list ([i (in-range start range)])
                                  (if block
                                    (send block call #f (list-ref value i))
-                                   (do-deep-copy with-value)))))
+                                   (do-deep-copy with-value)))
+                               (drop value (min (length value) range))))
 
            (debug " after ~a\n" value))
 
@@ -318,11 +319,13 @@
                               [(and block (eq? with-value no-value))
                                (send block call #f fixed)]
                               [else with-value])))
+           (debug "filled start ~a end ~a\n" starting ending)
            (set! value (append (take value (or starting 0))
                                filled
-                               (drop value (min (or ending (length value))
+                               (drop value (min (add1 (or ending (length value)))
                                                 (length value))))))
 
+         ;; fill takes a lot of different argument combinations
          (define/public (fill block [with-value no-value] [start no-value] [range no-value])
            (define (ruby:number? x)
              (or (number? x)
@@ -333,14 +336,21 @@
            (match (list block with-value start range)
              [(list #f (== no-value) (== no-value) (== no-value))
               (error 'fill "fill needs some arguments")]
+
+             ;; just a block means to replace each element with the result of
+             ;; applying the block to the element
              [(list (? ruby:procedure?) (== no-value) (== no-value) (== no-value))
               (fill-number block with-value 0 (length value))]
 
+             ;; a block and an argument mean apply the block to each element
+             ;; but starting at the argument
              [(list (? ruby:procedure?) (? ruby:number?) (== no-value) (== no-value))
               (fill-number block #f
                            (fix-range (fixnum->number with-value))
                            (length value))]
              
+             ;; block, start, end mean apply the block to each element between
+             ;; start and end positions
              [(list (? ruby:procedure?) (? ruby:number?) (? ruby:number?) (== no-value))
               (fill-number block #f
                            (fix-range (fixnum->number with-value))
@@ -361,7 +371,8 @@
              [(list #f (? ruby:number?) (? ruby:number?) (? ruby:number?))
               (fill-number block with-value
                            (fix-range (fixnum->number start))
-                           (fix-range (fixnum->number range)))]
+                           (+ (fix-range (fixnum->number start))
+                              (fix-range (fixnum->number range))))]
              [else (error 'fill "block ~a with-value ~a start ~a range ~a" block with-value start range)])
            this
            ;; (define real-start (fix-range (fixnum->number start)))
@@ -445,9 +456,11 @@
                               (send (convert-to-object v) to_s b)))
                           value)])
              (send String new #f (apply string-append
-                                        (map (lambda (s)
-                                               (send (send s to_s #f) &ruby->native))
-                                             vs)))))
+                                        (add-between
+                                          (map (lambda (s)
+                                                 (send (send s to_s #f) &ruby->native))
+                                               vs)
+                                          ",")))))
 
 		 (define/public (&* block arg)
 		   (match arg
