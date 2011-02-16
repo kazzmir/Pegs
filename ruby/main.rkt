@@ -7,6 +7,7 @@
      (only-in srfi/13 string-reverse)
      racket/contract
 	 racket/set
+     unstable/match
      "debug.rkt"
      (for-syntax "debug.rkt")
 	 (for-syntax racket/base))
@@ -299,7 +300,7 @@
 
            (debug " after ~a\n" value))
 
-         (define no-value (gensym))
+         (define no-value (gensym 'no-value))
          (define/private (fill-sequence block with-value range)
            (define starting #f)
            (define ending #f)
@@ -315,16 +316,56 @@
                               [(and block (not (eq? with-value no-value)))
                                (send block call #f with-value)]
                               [(and block (eq? with-value no-value))
-                               (send block call #f (racket->ruby fixed))]
+                               (send block call #f fixed)]
                               [else with-value])))
            (set! value (append (take value (or starting 0))
                                filled
                                (drop value (min (or ending (length value))
                                                 (length value))))))
 
-         (define/public (fill block [with-value no-value] [start 0] [range (length value)])
+         (define/public (fill block [with-value no-value] [start no-value] [range no-value])
+           (define (ruby:number? x)
+             (or (number? x)
+                 (send Fixnum instance? x)))
+           (define (ruby:procedure? x)
+             (send Proc instance? x))
            (debug "at fill args are block ~a with-value ~a start ~a range ~a\n" block with-value start range)
+           (match (list block with-value start range)
+             [(list #f (== no-value) (== no-value) (== no-value))
+              (error 'fill "fill needs some arguments")]
+             [(list (? ruby:procedure?) (== no-value) (== no-value) (== no-value))
+              (fill-number block with-value 0 (length value))]
+
+             [(list (? ruby:procedure?) (? ruby:number?) (== no-value) (== no-value))
+              (fill-number block #f
+                           (fix-range (fixnum->number with-value))
+                           (length value))]
+             
+             [(list (? ruby:procedure?) (? ruby:number?) (? ruby:number?) (== no-value))
+              (fill-number block #f
+                           (fix-range (fixnum->number with-value))
+                           (fix-range (fixnum->number start)))]
+             
+             [(list (? ruby:procedure?) (? sequence?) (== no-value) (== no-value))
+              (fill-sequence block no-value with-value)]
+
+             ;; fill(-1)
+             [(list #f (? ruby:number?) (== no-value) (== no-value))
+              (fill-number block with-value 0 (length value))]
+             [(list #f (? ruby:number?) (? sequence?) (== no-value))
+              (fill-sequence block with-value start)]
+             [(list #f (? ruby:number?) (? ruby:number?) (== no-value))
+              (fill-number block with-value
+                           (fix-range (fixnum->number start))
+                           (length value))]
+             [(list #f (? ruby:number?) (? ruby:number?) (? ruby:number?))
+              (fill-number block with-value
+                           (fix-range (fixnum->number start))
+                           (fix-range (fixnum->number range)))]
+             [else (error 'fill "block ~a with-value ~a start ~a range ~a" block with-value start range)])
+           this
            ;; (define real-start (fix-range (fixnum->number start)))
+           #;
            (cond
              [(sequence? with-value) (fill-sequence block no-value with-value)]
              [(sequence? start) (fill-sequence block with-value start)]
