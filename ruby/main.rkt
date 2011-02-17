@@ -53,6 +53,20 @@
        (instance-class ObjectClass)
        (name "Object")))
 
+(provide Range)
+(define Range
+  (new RubyClass
+       (name "Range")
+       (instance-class
+         (class* ObjectClass ()
+                 [init-field start end]
+                 (define/override (to_s block)
+                   (send String new (format "Range ~a ~a"
+                                            (convert-to-string start)
+                                            (convert-to-string end))))
+                 (super-new)
+                 ))))
+
 (provide String)
 (define String
   (new RubyClass
@@ -60,7 +74,7 @@
        (instance-class
          (class* ObjectClass ()
                  (init-field value)
-                 (define/override (to_s b) this)
+                 (define/override (to_s block) this)
          (define (make string)
            (send String new #f string))
          (define (remove-newline value)
@@ -295,16 +309,34 @@
            (set! value (append (take value start)
                                (for/list ([i (in-range start range)])
                                  (if block
-                                   (send block call #f (list-ref value i))
+                                   (send block call #f i)
                                    (do-deep-copy with-value)))
                                (drop value (min (length value) range))))
 
            (debug " after ~a\n" value))
 
          (define no-value (gensym 'no-value))
+
+         (define (fill-sequence block with-value range)
+           (define start (fix-range (convert-to-number (get-field start range))))
+           (define end (fix-range (convert-to-number (get-field end range))))
+           (define filled (for/list ([index (in-range start end)])
+                            (cond
+                              [(and block (not (eq? with-value no-value)))
+                               (send block call #f with-value)]
+                              [(and block (eq? with-value no-value))
+                               (send block call #f index)]
+                              [else with-value])))
+           (set! value (append (take value start)
+                               filled
+                               (drop value (min end (length value))))))
+
+
+         #;
          (define/private (fill-sequence block with-value range)
            (define starting #f)
            (define ending #f)
+           (debug "fill sequence is ~a\n" (for/list ([x range]) x))
            (define filled (for/list ([index range])
                             (define fixed (fix-range index))
                             (when (or (not starting)
@@ -330,6 +362,8 @@
            (define (ruby:number? x)
              (or (number? x)
                  (send Fixnum instance? x)))
+           (define (ruby:sequence? x)
+             (send Range instance? x))
            (define (ruby:procedure? x)
              (send Proc instance? x))
            (debug "at fill args are block ~a with-value ~a start ~a range ~a\n" block with-value start range)
@@ -354,15 +388,16 @@
              [(list (? ruby:procedure?) (? ruby:number?) (? ruby:number?) (== no-value))
               (fill-number block #f
                            (fix-range (fixnum->number with-value))
-                           (fix-range (fixnum->number start)))]
+                           (+ (fix-range (convert-to-number with-value))
+                              (fix-range (fixnum->number start))))]
              
-             [(list (? ruby:procedure?) (? sequence?) (== no-value) (== no-value))
+             [(list (? ruby:procedure?) (? ruby:sequence?) (== no-value) (== no-value))
               (fill-sequence block no-value with-value)]
 
              ;; fill(-1)
              [(list #f (? ruby:number?) (== no-value) (== no-value))
               (fill-number block with-value 0 (length value))]
-             [(list #f (? ruby:number?) (? sequence?) (== no-value))
+             [(list #f (? ruby:number?) (? ruby:sequence?) (== no-value))
               (fill-sequence block with-value start)]
              [(list #f (? ruby:number?) (? ruby:number?) (== no-value))
               (fill-number block with-value
@@ -878,21 +913,26 @@
 
 (define-syntax* (&Range stx)
   (syntax-case stx ()
-    [(_ low high)
+    [(_ start end)
+     #'(send Range new #f start end)
+     #;
      #'(let ([high-number (fixnum->number high)]
              [low-number (fixnum->number low)])
          (if (< high-number low-number)
-           (in-range low-number high-number -1)
+           (in-range high-number low-number -1)
            (in-range low-number high-number)))]))
 
 (define-syntax* (&Range-inclusive stx)
   (syntax-case stx ()
-    [(_ low high)
-     #'(let ([high-number (fixnum->number high)]
-             [low-number (fixnum->number low)])
-         (if (< high-number low-number)
-           (in-range low-number (- 1 high-number) -1)
-           (in-range low-number (+ 1 high-number))))]))
+    [(_ start end)
+     #'(send Range new #f start (add1 (convert-to-number end)))
+     #;
+     #'(let ([start-number (fixnum->number start)]
+             [end-number (fixnum->number end)])
+         (debug "range inclusive ~a to ~a\n" start-number end-number)
+         (if (< end-number start-number)
+           (in-range start-number (+ 1 end-number) -1)
+           (in-range start-number (+ 1 end-number))))]))
 
 (define-syntax* &String-computation
   (syntax-rules ()
