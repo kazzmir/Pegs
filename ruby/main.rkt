@@ -723,8 +723,64 @@
 
 (define-syntax* &Compstmt
   (lambda (stx)
+    (define (handle-statement statement continue)
+      (with-syntax ([(continue ...) continue]
+                    [statement statement])
+        (syntax-case #'statement (&Assignment &Multiple-assignment &Array-lookup)
+          [(&Multiple-assignment left right)
+           (syntax-case #'left (&Mlhs)
+             [(&Mlhs (single ...) rest)
+              (with-syntax ([(set ...)
+                             (syntax-case #'right (&Mrhs)
+                               [(&Mrhs (single-right ...) rest-right)
+                                (raise-syntax-error 'assignment "can't handle mrhs yet")]
+                               [else
+                                 (for/list ([item (syntax->list #'(single ...))]
+                                            [index (in-naturals)])
+                                   (with-syntax ([var (variable item)]
+                                                 [index index])
+                                     (if (bound? #'var)
+                                       #'(set! var (list-ref (send rest get-values) (sub1 index)))
+                                       #'(define var (list-ref (send rest get-values) (sub1 index)))
+                                       )))])]
+                               [rest*
+                                 (syntax-case #'right (&Mrhs)
+                                   [(&Mrhs (single-right ...) rest-right)
+                                    (raise-syntax-error 'assignment "can't handle mrhs yet")]
+                                   [else
+                                     (if (syntax-e #'rest)
+                                        (with-syntax ([size (length (syntax->list #'(single ...)))]
+                                                      [var (variable #'rest)])
+                                          (if (bound? #'var)
+                                            #'(set! var (send Array new #f (drop (send rest get-values) size)))
+                                            #'(define var (send Array new #f (drop (send rest get-values) size)))))
+                                        #'(void))])])
+                             #'(let ()
+                                 set ...
+                                 rest*
+                                 continue ...))])]
+          [(&Assignment lhs expr)
+           (with-syntax ((var (variable #'lhs)))
+             (if (bound? #'var)
+               #'(begin (set! var expr)
+                        var)
+               #'(let ((var expr))
+                   var
+                   continue ...)))]
+          [(&Assignment (&Array-lookup object start end)
+                        expression)
+           (with-syntax ([var (variable #'object)])
+             (if (bound? #'var)
+               #'(begin
+                   (send var splice start end expression)
+                   continue ...)
+               (raise-syntax-error "~a is unbound" #'var)))]
+          [_ #'(begin statement continue ...)])))
+
     (syntax-case stx ()
       ((_) #'(make-nil))
+      [(_ body) (handle-statement #'body '())]
+      #;
       [(_ body)
        (syntax-case #'body (&Assignment)
          ((&Assignment lhs expr)
@@ -736,6 +792,9 @@
                   var))))
          (_
            #'(begin body)))]
+      [(_ body0 body1 bodys ...)
+       (handle-statement #'body0 #'((&Compstmt body1 bodys ...)))]
+      #;
       [(_ body0 body1 bodys ...)
        (syntax-case #'body0 (&Assignment &Array-lookup)
          [(&Assignment (&Array-lookup object start end)

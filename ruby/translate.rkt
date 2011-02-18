@@ -192,9 +192,21 @@
          (make/loc #'(#:block block args ... . rest)
                    source loc pos))]
 
+      [(struct Mlhs (location span vars rest))
+       (debug "Mlhs vars ~a rest ~a\n" vars rest)
+       (define vars* (map loop vars))
+       (define rest* (if rest (loop rest) #f))
+       (make/loc* `(&Mlhs ,vars* ,rest*) location span)]
+      
+      [(struct Mrhs (location span vars rest))
+       (define vars* (map loop vars))
+       (define rest* (if rest (loop rest) #f))
+       (make/loc* `(&Mrhs ,vars* ,rest*) location span)]
+
       [(struct Multiple-assignment (location span left-hand right-hand))
-       ;; FIXME
-       (make/loc* `(void) location span)]
+       (define left (loop left-hand))
+       (define right (loop right-hand))
+       (make/loc* `(&Multiple-assignment ,left ,right) location span)]
 
       [(struct Call-args (loc pos args rest block))
        (debug "Call-args ~a ~a ~a\n" args rest block)

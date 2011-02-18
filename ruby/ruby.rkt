@@ -635,29 +635,32 @@
 		 ((lhs) $))
 
       (mlhs ((mlhs-basic) $)
-	    (("(" w (bind m mlhs-entry) w ")") m))
+            (("(" w (bind m mlhs-entry) w ")") m))
 
       (mlhs-entry ((mlhs-basic) $)
-		  (("(" w (bind m mlhs-entry) w ")") m))
+                  (("(" w (bind m mlhs-entry) w ")") m))
 
-      (mlhs-basic (((bind m mlhs-head) "*" (bind n (? mlhs-node)))
-		   (make-Mlhs $position $span m
-			      (if (null? n)
-				#f n)))
-		  (((bind m mlhs-head) (bind i (? mlhs-item)))
-		   (make-Mlhs $position $span (append m
-				      (if (null? i) i (list i)))
-			      #f))
-		  (("*" (bind m (? mlhs-node)))
-		   (make-Mlhs $position $span '()
-			      (if (null? m)
-				#f m))))
+      [mlhs-basic
+        (((bind m mlhs-head) "*" (bind n (? mlhs-node)))
+         (make-Mlhs $position $span
+                    m
+                    (if (null? n)
+                      #f n)))
+        (((bind m mlhs-head) (bind i (? mlhs-item)))
+         (make-Mlhs $position $span
+                    (append m (if (null? i) i (list i)))
+                    #f))
+        (("*" (bind m (? mlhs-node)))
+         (make-Mlhs $position $span
+                    '()
+                    (if (null? m)
+                      #f m)))]
 
       (mlhs-item ((mlhs-node) $)
-		 (("(" w (bind m mlhs-entry) w ")") m))
+                 (("(" w (bind m mlhs-entry) w ")") m))
 
       (mlhs-head (((+ (bind m mlhs-item) w "," w (predicate m)))
-		  $))
+                  $))
 
       #|
       (((bind p primary) "[" wn (bind args aref-args) wn "]")
@@ -673,10 +676,10 @@
 	 |#
 
       (mlhs-node ((primary-lhs-special) $)
-		 (("::" (bind c constant))
-		  (make-Dotted-access $position $span (make-Object $position $span) c))
-		 ((backref) $)
-		 ((variable) $))
+                 (("::" (bind c constant))
+                  (make-Dotted-access $position $span (make-Object $position $span) c))
+                 ((backref) $)
+                 ((variable) $))
 
       #;
       (mlhs ((mlhs-basic) $)
@@ -1331,11 +1334,11 @@
 		(foldl (lambda (proc obj) (proc obj)) left right)))
       
       (primary-lhs-special
-	(((bind left primary-left-real) (bind right (* (bind f w primary-right)
-						       (ensure primary-lhs-right)
-						       (predicate f)))
-					(bind right-lhs primary-lhs-right))
-	 (right-lhs (foldl (lambda (proc obj) (proc obj)) left right))))
+        (((bind left primary-left-real) (bind right (* (bind f w primary-right)
+                                                       (ensure primary-lhs-right)
+                                                       (predicate f)))
+                                        (bind right-lhs primary-lhs-right))
+         (right-lhs (foldl (lambda (proc obj) (proc obj)) left right))))
 
       (primary-lhs-right ((w "[" wn (bind args aref-args) wn "]")
 			  (lambda (obj)
