@@ -87,9 +87,15 @@
          (define/public (chomp block)
            (make (remove-newline value)))
 
-         ;; FIXME!
-         (define/public (split block [arg ""])
-           (send Array new #f '()))
+         ;; FIXME: this doesn't split right
+         ;; Racket:
+         ;; > (regexp-split (pregexp "") "foo")
+         ;; '("" "f" "o" "o" "")
+         ;; Ruby:
+         ;; > "foo".split(//)
+         ;; ["f", "o", "o"]
+         (define/public (split block [arg (pregexp "")])
+           (send Array new #f (regexp-split arg value)))
 
          (define/public (&== block arg)
 		   (equal? value (send (send (convert-to-object arg) to_s #f) &ruby->native)))
@@ -274,8 +280,17 @@
            (set! value (send (sort block) get-values))
            this)
 
-         ;; FIXME!
          (define/public (uniq! block)
+           (define (in-list? list item)
+             (for/or ([here list])
+               (ruby:equals? here item)))
+
+           (set! value
+             (racket:reverse (for/fold ([all '()])
+                                       ([item (get-values)])
+                                       (if (in-list? all item)
+                                         all
+                                         (cons item all)))))
            this)
 
          (define/public (empty? block)
