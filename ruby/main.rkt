@@ -64,6 +64,8 @@
                    (send String new (format "Range ~a ~a"
                                             (convert-to-string start)
                                             (convert-to-string end))))
+                 (define/public (to_a block)
+                   (send Array new #f (for/list ([i (in-range start end)]) i)))
                  (super-new)
                  ))))
 
@@ -733,7 +735,10 @@
               (with-syntax ([(set ...)
                              (syntax-case #'right (&Mrhs)
                                [(&Mrhs (single-right ...) rest-right)
-                                (raise-syntax-error 'assignment "can't handle mrhs yet")]
+                                (if (and (null? (syntax->list #'(single ...)))
+                                         (null? (syntax->list #'(single-right ...))))
+                                  #'()
+                                  (raise-syntax-error 'assignment "can't handle mrhs yet"))]
                                [else
                                  (for/list ([item (syntax->list #'(single ...))]
                                             [index (in-naturals)])
@@ -746,7 +751,10 @@
                                [rest*
                                  (syntax-case #'right (&Mrhs)
                                    [(&Mrhs (single-right ...) rest-right)
-                                    (raise-syntax-error 'assignment "can't handle mrhs yet")]
+                                    (with-syntax ([var (variable #'rest)])
+                                      (if (bound? #'var)
+                                        #'(set! var rest-right)
+                                        #'(define var rest-right)))]
                                    [else
                                      (if (syntax-e #'rest)
                                         (with-syntax ([size (length (syntax->list #'(single ...)))]
@@ -759,14 +767,6 @@
                                  set ...
                                  rest*
                                  continue ...))])]
-          [(&Assignment lhs expr)
-           (with-syntax ((var (variable #'lhs)))
-             (if (bound? #'var)
-               #'(begin (set! var expr)
-                        var)
-               #'(let ((var expr))
-                   var
-                   continue ...)))]
           [(&Assignment (&Array-lookup object start end)
                         expression)
            (with-syntax ([var (variable #'object)])
@@ -775,6 +775,14 @@
                    (send var splice start end expression)
                    continue ...)
                (raise-syntax-error "~a is unbound" #'var)))]
+          [(&Assignment lhs expr)
+           (with-syntax ((var (variable #'lhs)))
+             (if (bound? #'var)
+               #'(begin (set! var expr)
+                        var)
+               #'(let ((var expr))
+                   var
+                   continue ...)))]
           [_ #'(begin statement continue ...)])))
 
     (syntax-case stx ()
